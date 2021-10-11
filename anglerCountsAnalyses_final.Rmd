@@ -24,14 +24,13 @@ knit: (function(inputFile, encoding) {
 ```{r global_options, echo=FALSE}
 knitr::opts_chunk$set(fig.width=6, fig.asp = 0.618, fig.path='output/images/',
                       echo=TRUE, warning=FALSE, message=FALSE, cache= FALSE)
-  
+
 
 options(allow_html_in_all_outputs=TRUE)
 ```
 
 # Libraries
 
-Fernando - which packages do we actually need?
 
 ```{r library}
 
@@ -39,11 +38,11 @@ Fernando - which packages do we actually need?
 #install.packages("pacman")
 #writeLines(pacman::p_lib(), "~/Desktop/list_of_R_packages.csv") # to quickly back up packages
 
-#pacman::p_load(tidyverse,ggplot2, tidyr, janitor, data.table, here, skimr, lubridate, sf, leaflet, mapview, styler, readxl, ggrepel, units, lwgeom, cowplot, osmdata, maps) # just add needed packages to this line and Pacman will install and load them.
+pacman::p_load(
+    ggsn, #to add scale bars
+    mapview, # to save maps from leaflet
+    cowplot, rnaturalearth, tidyverse,here, skimr, sf, leaflet, mapview, readxl, ggmap, effects, MuMIn, grid)
 
-# pacman::p_load(tidyverse,ggplot2, tidyr, janitor, data.table, here, skimr, lubridate, sf, leaflet, mapview, styler, readxl, ggrepel, units, lwgeom, geos, htmltools, viridis, RColorBrewer, gganimate, tmap, ggmap, rgdal, "cowplot", "googleway", "ggplot2", "ggrepel", "ggspatial", "libwgeom", "sf", "rnaturalearth", "rnaturalearthdata", rgeos, osmdata, maps, rnaturalearthhires)
-
-pacman::p_load(tidyverse,ggplot2, tidyr, janitor, data.table, here, skimr, lubridate, sf, leaflet, mapview, styler, readxl, ggrepel, units, lwgeom, geos, htmltools, viridis, RColorBrewer, gganimate, tmap, ggmap, rgdal, "cowplot", "googleway", "ggplot2", "ggrepel", "ggspatial", "sf", "rnaturalearth", "rnaturalearthdata", rgeos, osmdata, maps,raster, ggsn, ggthemes, effects, MuMIn, gdata, grid, ggplotify, rasterVis, compareDF, diffdf)
 
 
 ```
@@ -55,16 +54,15 @@ the main map shows Kaunas Water reservoir as light gray as well as
 - drone trajectories
 - spots for visual counts on ice
 
-Fernando can you please modify the final figure 1 with a few points I indicated below? Thanks
 
 ```{r fig1, echo=TRUE}
 
 drone_north <- read_xlsx("data/PlannedTrajectory_north.xlsx")
 drone_south <- read_excel("data/PlannedTrajectory_south.xlsx")
 visual_coords <- read.table(file = "data/visual_coordinates.txt") %>% 
-  rename(Latitude = V1, Longitude = V2) %>% 
-  mutate(Latitude = str_sub(Latitude,1, nchar(Latitude)-1)) %>% 
-  mutate(across(where(is.character), as.numeric))
+    rename(Latitude = V1, Longitude = V2) %>% 
+    mutate(Latitude = str_sub(Latitude,1, nchar(Latitude)-1)) %>% 
+    mutate(across(where(is.character), as.numeric))
 
 #Alternative terrain background
 
@@ -86,57 +84,84 @@ visual_coords1 <- visual_coords %>% filter (Longitude > 24.10)
 
 stamen <- get_stamenmap(kau_borders, zoom = 11, maptype = "terrain-background")
 
-## Fernando, can we add a scale to this main map? We need to add a line indicating 5km scale. Also rename axes labels to longitude and latitude
-
+# Map of the surveys
 g1 <- ggmap(stamen)+
     geom_path(drone_south, mapping = aes (x = Longitude, y = Latitude), color = "yellow", size = 1.0 )+
-  geom_path(drone_north, mapping = aes (x = Longitude, y = Latitude), color = "blue", size = 1.0)+
-  geom_point(visual_coords1, mapping = aes (x = Longitude, y = Latitude), color = "red", size = 2.5 ) +
-  geom_text(x=23.97, y=54.91, label= "Kaunas city", size = 5, fontface = 2) +
+    geom_path(drone_north, mapping = aes (x = Longitude, y = Latitude), color = "blue", size = 1.0)+
+    geom_point(visual_coords1, mapping = aes (x = Longitude, y = Latitude), color = "red", size = 2.5 ) +
+    geom_text(x=23.97, y=54.91, label= "Kaunas city", size = 5, fontface = 2) +
     theme(
-    panel.grid.major = element_blank(), 
-    panel.grid.minor = element_blank(),
-    axis.title.x = element_text(size=14),
-    axis.title.y = element_text(size=14),
-    axis.text=element_text(size=8)
-  )
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        axis.title.x = element_text(size=12),
+        axis.title.y = element_text(size=12),
+        axis.text=element_text(size=8)
+    ) +
+    xlab(expression(paste("Longitude" ))) +
+    ylab(expression(paste("Latitude"))) 
 
-g1  
+
+g1 
+
+limts <- c(xmin =  .4 + min(g1$data$lon),
+           xmax = -.4 + max(g1$data$lon),
+           ymin =  .2 + min(g1$data$lat),
+           ymax = -.2 + max(g1$data$lat)
+)
+
+## add a scalebar
+g1s <- g1 +
+    ggsn::scalebar(dist = 5,
+                   dist_unit = "km", 
+                   model = 'WGS84',
+                   transform = TRUE,
+                   x.min = limts[1], x.max = limts[2],  
+                   y.min = limts[3], y.max = limts[4], 
+                   location = "topleft",
+                   st.size = 3
+    ) 
 
 # Creating inset
 
 world <- ne_countries(scale = "medium", returnclass = "sf")
+sf::sf_use_s2(FALSE) # turn off the s2 processing 
 europe_cropp <- st_crop(world, xmin = 5, xmax = 35,
-                                  ymin = 50, ymax = 63)
+                        ymin = 50, ymax = 63)
 
 kau_shape <- here("data" , "kaunas", "Kaunas_water_reservoir.shp") %>%
-  st_read() %>% 
-  st_transform(4326) #transform crs to wgs84
- 
+    st_read() %>% 
+    st_transform(4326) #transform crs to wgs84
+
 lit_shape <- here("data" , "lithuania", "lt_100km.shp") %>%
-  st_read() %>%
-  st_transform(4326) #transform crs to wgs84
+    st_read() %>%
+    st_transform(4326) #transform crs to wgs84
 
 kau_bb = st_as_sfc(st_bbox(kau_shape)) 
 lit_bb = st_as_sfc(st_bbox(lit_shape)) 
 
 g2 <-   ggplot() +
-  geom_sf(data = europe_cropp, fill = "gray96", color = "gray60", size = 0.3) +
-  geom_sf(data = lit_bb, fill = NA, color = "blue", size = 0.8) +
-  geom_sf(data = kau_bb, fill = "darkblue", color = "darkblue", size = 1) +
-  theme_void()
-
+    geom_sf(data = europe_cropp, fill = "gray96", color = "gray60", size = 0.3) +
+    geom_sf(data = lit_bb, fill = NA, color = "blue", size = 0.8) +
+    geom_sf(data = kau_bb, fill = "darkblue", color = "darkblue", size = 1) +
+    theme_light() + theme(panel.border = element_blank(),
+                          panel.grid.major = element_blank(),
+                          panel.grid.minor = element_blank(),
+                          axis.line = element_blank(),
+                          axis.title = element_blank(),
+                          axis.ticks = element_blank(),
+                          axis.text = element_blank(), 
+                          plot.margin = margin(0.01, 0.01, 0.01, 0.01, "cm"),)
 g2
 
-## Fernando, some work is needed here too please. We need some fill for the inset and move it to the bottom left corner. Also 
 ## combine plots
 fig1 <- ggdraw() +
-  draw_plot(g1) +
-  draw_plot(g2, x = 0.15, y = 0.1, width = 0.4, height = 0.4)
+    draw_plot(g1s) +
+    draw_plot(g2, x = 0.15, y = 0.10, width = 0.4, height = 0.4)
+
 
 fig1
-#ggsave(here ("output", "images", "fig1.png"), dpi = "print")
 
+#ggsave(here ("output", "images", "fig1.png"), dpi = "print")
 
 # data_map <- gdata::combine(drone_north,drone_south,visual_coords) %>% 
 #   mutate(source = as.factor(source))
@@ -167,6 +192,7 @@ fig1
 This chunk does not need to be run, because processed data is saved into drones_df_full.RData files
 
 ```{r drone_deeper, include = F, eval = F, echo = F}
+
 # first read in all drone data, including note on whether the angler is on the shore or in the boat 
 
 # load drone data
@@ -183,15 +209,15 @@ drones_raw <- map_df(file.list, read_xlsx, .id = "id") # had to change Ziema to 
 #2983 a total number of anglers
 
 drones_df <- drones_raw %>% 
-  janitor::clean_names() %>% 
-  dplyr::select(1:9) %>% 
-  mutate(date_name = lubridate::ymd(data)) %>% 
-  dplyr::rename(lat = latitude) %>% 
-dplyr::rename(lon = longitude) %>% 
-  dplyr::mutate(type = "drone") %>% 
-  drop_na(lat) %>% #remove empty rows
-tidyr::uncount(weights = kiekis) %>% # single row for each fisherman in kiekis (number of fishermen observed in each point)
-  dplyr::select(3:10)
+    janitor::clean_names() %>% 
+    dplyr::select(1:9) %>% 
+    mutate(date_name = lubridate::ymd(data)) %>% 
+    dplyr::rename(lat = latitude) %>% 
+    dplyr::rename(lon = longitude) %>% 
+    dplyr::mutate(type = "drone") %>% 
+    drop_na(lat) %>% #remove empty rows
+    tidyr::uncount(weights = kiekis) %>% # single row for each fisherman in kiekis (number of fishermen observed in each point)
+    dplyr::select(3:10)
 
 # fix the number of anglers in boats. After uncount command the number of boat anglers was not uncounted
 drones_df$boat <- 0
@@ -209,6 +235,7 @@ drone_summary <- drones_df %>% group_by(date_name) %>% summarise(anglers = n())
 # save(drones_df, file = "data/drones_df_full.RData")
 # 
 # write.csv(drones_df, here("data", "drones_df_full.csv"))
+
 ```
 
 ### Get deeper coordinates for drone data
@@ -217,130 +244,145 @@ This section does not need to be run, and full echosounder data cannot be provid
 
 ```{r, eval = F, echo = F, include = F}
 
-multipoint_df <- readRDS( file = "otherData/multipoint_df.rds")
+# Deeper data in Kaunas
+kaunas_sf <- readRDS( here("data","lithuania", "kaunas_sf.rds")) 
 
-#filter deeper and drone days 
 
- deeper_df<- multipoint_df %>% 
- dplyr::select(trip_id, user_id, lat, lon, date_name, hour_of_day, duration) %>% 
-  dplyr::semi_join(drones_df, by= "date_name") %>% 
-  dplyr::mutate(type = "deeper") %>% 
-   dplyr::distinct(user_id, date_name,lat, lon, .keep_all = T)
- 
+# Deeper rounded geometries, in drone dates
 
- # filter by hour of day
- 
- deeper_df_612 <- deeper_df %>% 
-       dplyr::filter(hour_of_day >= 6, hour_of_day <= 12)   #  filter by hour range
- 
-  # Bind deeper and dron dfs
- 
- deeper_drone_df <- dplyr::bind_rows(deeper_df,drones_df) %>% 
-  mutate(lat = round(lat,4)) %>% 
-  mutate(lon = round(lon,4)) %>% 
-  mutate(across(c(user_id, date_name, trip_id,  type),factor)) %>% 
-  distinct() %>% 
-   drop_na(lat|lon)
+deeper_df <- kaunas_sf %>%
+    dplyr::mutate(lon = sf::st_coordinates(.)[,1],
+                  lat = sf::st_coordinates(.)[,2]) %>%
+    dplyr::semi_join(drones_df, by= "date_name") %>% 
+    dplyr::select(user_id, lat, lon, date_name, hour_of_day, duration) %>% 
+    dplyr::mutate(lat = as.numeric(as.character(lat,4))) %>% 
+    dplyr::mutate(lon = as.numeric(as.character(lon,4))) %>% 
+    # group_by(trip_id) %>% 
+    # filter(row_number()==1 | row_number()==n()) %>%  # filter first and last positions
+    # ungroup() %>% 
+    dplyr::mutate(type = "deeper")  %>% 
+    # dplyr::mutate(across(c(user_id, date_name, trip_id,  type),factor)) %>% 
+    # dplyr::filter(hour_of_day >= 6, hour_of_day <= 12) %>% 
+    st_drop_geometry() 
 
- # Hour filtered version
- 
- deeper_drone_df_612 <- dplyr::bind_rows(deeper_df_612,drones_df) %>% 
-  mutate(lat = round(lat,4)) %>% 
-  mutate(lon = round(lon,4)) %>% 
-  mutate(across(c(user_id, date_name, trip_id,  type),factor)) %>% 
-  distinct() %>% 
-   drop_na(lat|lon)
- 
- 
- # Create spatial objects
+# Deeper rounded geometries, in drone dates, between 6 - 12h
 
- deeper_drone_sf <- st_as_sf(deeper_drone_df, coords = c("lon", "lat"),  crs=4326)
- deeper_drone_sf_612 <- st_as_sf(deeper_drone_df_612, coords = c("lon", "lat"),  crs=4326)
- 
- # Load shapefile of kaunas
- 
- kaunas_shp<- here("data" , "arcgis_layers", "Kaunas_water_reservoir.shp") %>%
-  st_read() %>% 
-  st_transform(4326) #transform crs to wgs84
- 
-# Load shapefile of drone surveyed area
- 
- drone_shp<- here("data" , "arcgis_layers", "drone_flights.shp") %>%
-  st_read() %>% 
-  st_transform(4326) #transform crs to wgs84
- 
-# filter points within Kaunas
- 
-deeper_drone_kaunas <- 
-  st_join(deeper_drone_sf, kaunas_shp, join = st_within) %>% 
-  filter(!is.na(NAM)) # spatial join to get intersection of points and poly
- 
- 
-# filter points within surveyed area
- 
-deeper_drone_surveyed_area <- 
-  st_join(deeper_drone_sf, drone_shp, join = st_within) %>% 
-  filter(!is.na(NAM)) # spatial join to get intersection of points and poly
+deeper612_df <- kaunas_sf %>%
+    dplyr::mutate(lon = sf::st_coordinates(.)[,1],
+                  lat = sf::st_coordinates(.)[,2]) %>%
+    dplyr::semi_join(drones_df, by= "date_name") %>% 
+    dplyr::select(user_id, lat, lon, date_name, hour_of_day, duration) %>% 
+    dplyr::mutate(lat = as.numeric(as.character(lat,4))) %>% 
+    dplyr::mutate(lon = as.numeric(as.character(lon,4))) %>% 
+    # group_by(trip_id) %>% 
+    # filter(row_number()==1 | row_number()==n()) %>%  # filter first and last positions
+    # ungroup() %>% 
+    dplyr::mutate(type = "deeper")  %>% 
+    # dplyr::mutate(across(c(user_id, date_name, trip_id,  type),factor)) %>% 
+    dplyr::filter(hour_of_day >= 6, hour_of_day <= 12) %>%
+    st_drop_geometry() 
 
-# filter points within area and time range
 
- 
-deeper_drone_surveyed_area_612 <- 
-  st_join(deeper_drone_sf_612, drone_shp, join = st_within) %>% 
-  filter(!is.na(NAM)) # spatial join to get intersection of points and poly
+# Bind deeper and dron dfs
 
-# save(deeper_drone_kaunas, file = "data/deeper_drone_kaunas40days.RData")
-# save(deeper_drone_surveyed_area, file = "data/deeper_drone_kaunas_survarea.RData")
-# save(deeper_drone_surveyed_area_812, file = "data/deeper_drone_kaunas_surv612.RData")
+deeper_drone_df <- dplyr::bind_rows(drones_df, deeper_df) %>% 
+    dplyr::distinct() %>% 
+    drop_na(lat|lon) %>% 
+    dplyr::mutate(across(c(user_id,  type),factor)) %>% 
+    dplyr::mutate(date_name = ymd(date_name)) 
+
+
+saveRDS(deeper_drone_df, here("data","lithuania", "deeper_drone_kaunas",  "deeper_drone_df.rds"))
+
+# Hour filtered version
+
+deeper_drone612_df <- dplyr::bind_rows(drones_df, deeper612_df) %>% 
+    dplyr::distinct() %>% 
+    drop_na(lat|lon) %>% 
+    dplyr::mutate(across(c(user_id,  type),factor)) %>% 
+    dplyr::mutate(date_name = ymd(date_name)) 
+
+
+# Create spatial objects
+
+deeper_drone_sf <- st_as_sf(deeper_drone_df, coords = c("lon", "lat"),  crs=4326)
+deeper_drone612_sf <- st_as_sf(deeper_drone612_df, coords = c("lon", "lat"),  crs=4326)
+
+# saveRDS(deeper_drone_sf, here("data","lithuania", "deeper_drone_kaunas",  "deeper_drone_sf.rds"))
+# 
+# saveRDS(deeper_drone612_sf, here("data", "lithuania" , "deeper_drone_kaunas",  "deeper_drone612_sf.rds"))
+
 
 ```
 
 ## Fig. S2: Map drone vs deeper
 
-Fernando, I cannot find these RData files in the directory anglerCounts_git/data or anywehre in our shared folders
-I found three csv files - are they the same? I can see them on github online, but they are 3 months old, so I am not sure these are the latest files. Can you please check that this chunk can be run and data is available. We also need to produce a few plots saved to the output/ folder which I can add to the manuscript
-
 ```{r map_drone}
 
-load(file = "data/drones_df_full.RData")
-load(file = "data/deeper_drone_kaunas40days.RData")
-load(file = "data/deeper_drone_kaunas_survarea.RData")
-load(file = "data/deeper_drone_kaunas_surv612.RData")
+deeper_drone_sf <- readRDS(here("data","lithuania", "deeper_drone_kaunas",  "deeper_drone_sf.rds"))
+deeper_drone_surveyed_area_sf <- readRDS( here("data", "lithuania", "deeper_drone_kaunas",  "deeper_drone_surveyed_area_sf.rds"))
+deeper_drone_surveyed_area_612_sf <- readRDS( here("data","lithuania", "deeper_drone_kaunas",  "deeper_drone_surveyed_area_612_sf.rds"))
 
- deeper_drone_sf <- st_as_sf(deeper_drone_kaunas, coords = c("lon", "lat"),  crs=4326)
- deeper_drone_sf_612 <- st_as_sf(deeper_drone_surveyed_area_612, coords = c("lon", "lat"),  crs=4326)
-
-  kaunas_shp<- here("data" , "arcgis_layers", "Kaunas_water_reservoir.shp") %>%
-  st_read() %>% 
-  st_transform(4326) #transform crs to wgs84
- 
 
 pal <- colorFactor(
- palette = c('red', 'blue'),
-  domain = deeper_drone_sf$type
+    palette = c('red', 'blue'),
+    domain = deeper_drone_sf$type
 )
 
 
 #select one of these days 
-unique(deeper_drone_kaunas$date_name)
-#  [1] 2020-11-30 2020-04-25 2021-01-23 2021-01-24 2021-01-30 2021-01-21 2020-05-09 2020-08-22 2020-09-02 2020-04-24 2020-05-30 2020-07-24
-# [13] 2020-12-27 2020-06-27 2020-05-26 2020-10-24 2020-08-14 2020-11-05 2020-03-28 2020-10-03 2020-06-16 2020-05-05 2020-05-21 2020-06-07
-# [25] 2020-07-18 2020-07-09 2020-11-21 2020-03-23 2020-12-13 2020-09-19 2020-05-15 2020-08-04 2020-08-28 2020-09-24 2020-12-09 2020-10-14
-# [37] 2020-09-11 2021-02-19 2021-02-24 2021-02-27
+unique(deeper_drone_surveyed_area_sf$date_name)
+#  [1] "2020-03-23" "2020-03-28" "2020-04-24" "2020-04-25" "2020-05-05" "2020-05-09" "2020-05-15"
+#  [8] "2020-05-21" "2020-05-26" "2020-05-30" "2020-09-02" "2020-09-11" "2020-09-19" "2020-09-24"
+# [15] "2020-10-03" "2020-10-14" "2020-10-24" "2020-11-05" "2020-11-21" "2020-11-22" "2020-11-23"
+# [22] "2020-11-24" "2020-11-25" "2020-11-26" "2020-11-27" "2020-11-28" "2020-11-29" "2020-11-30"
+# [29] "2020-06-07" "2020-06-16" "2020-06-27" "2020-07-09" "2020-07-18" "2020-07-24" "2020-08-04"
+# [36] "2020-08-14" "2020-08-22" "2020-08-28" "2020-12-09" "2020-12-13" "2020-12-27" "2021-01-21"
+# [43] "2021-01-23" "2021-01-24" "2021-01-30" "2021-02-19" "2021-02-24" "2021-02-27"
 
-#deeper_drone_surveyed_area_812 %>% 
-#deeper_drone_surveyed_area %>% 
-deeper_drone_kaunas %>% 
-   filter(date_name %in% c("2021-01-21")) %>% 
-leaflet() %>% 
-  addTiles() %>%
-  addCircles(weight = 2, 
-             radius = 3, color = ~pal(type)) %>% 
- addScaleBar(position = "topright") #%>%
-  #addLegend("bottomright", pal = pal, values = ~type,
-   # title = "Echosounder vs. drone observations",
- # title = "Echosounder vs. drone observations, between 8-12h",
-    #opacity = 1)
+
+map1 <- deeper_drone_sf %>%
+    dplyr::filter(date_name >= "2021-01-24" & date_name <= "2021-01-24") %>% 
+    leaflet() %>% 
+    addTiles() %>%
+    addCircles(weight = 2, 
+               radius = 3, color = ~pal(type))  %>% 
+    addScaleBar(position = "topright")  %>%
+    addLegend("bottomright", pal = pal, values = ~type,
+              title = "Echosounder vs. drone observations, Kaunas reservoir",
+              opacity = 1)
+
+mapview::mapshot(map1, file = here("output", "deeper_drone_sf.png") )
+
+### Drone surveyed area only
+
+map2 <- deeper_drone_surveyed_area_sf %>%
+    dplyr::filter(date_name >= "2021-01-24" & date_name <= "2021-01-24") %>% 
+    leaflet() %>% 
+    addTiles() %>%
+    addCircles(weight = 2, 
+               radius = 3, color = ~pal(type))  %>% 
+    addScaleBar(position = "topright")  %>%
+    addLegend("bottomright", pal = pal, values = ~type,
+              title = "Echosounder vs. drone observations, drone surveyed area",
+              opacity = 1)
+
+mapview::mapshot(map2, file = here("output", "deeper_drone_surveyed_area_sf.png") )
+
+#### Drone surveyed area, between 6-12h
+
+map3 <- deeper_drone_surveyed_area_612_sf %>% 
+    dplyr::filter(date_name >= "2021-01-24" & date_name <= "2021-01-24") %>% 
+    leaflet() %>% 
+    addTiles() %>%
+    addCircles(weight = 2, 
+               radius = 3, color = ~pal(type))  %>% 
+    addScaleBar(position = "topright")  %>%
+    addLegend("bottomright", pal = pal, values = ~type,
+              title = "Echosounder vs. drone observations, drone surveyed area,between 6-12h",
+              opacity = 1)
+
+mapview::mapshot(map3, file = here("output", "deeper_drone_surveyed_area_612.png") )
 
 
 ```
@@ -424,7 +466,7 @@ drone$weekday <- as.factor(drone$weekday)
 drone$weather <- as.factor(drone$weather)
 is.numeric(drone$Temp)
 
-#First we need to decide which distribution we want to assume for the anglers. If we use basic linear model we assume normal distribution, which means that the numbers can go to minus to plus infinity (there can be a negative number of anglers observed). Let's see how they are distributed. Most likely we need to assume lognomral distribution. This means that the logarith of the value should be approximately normally distributed. Lognormal distribution cannot take negative values
+#First we need to decide which distribution we want to assume for the anglers. If we use basic linear model we assume normal distribution, which means that the numbers can go to minus to plus infinity (there can be a negative number of anglers observed). Let's see how they are distributed. Most likely we need to assume lognormal distribution. This means that the logarithm of the value should be approximately normally distributed. Lognormal distribution cannot take negative values
 hist(drone$Anglers, breaks = 20)
 #for count data people recommend using Poisson distribution, but it does not work for us this distribution assumes that mean is about equal to variance. This is certainly not true in our case
 mean(drone$Anglers)
@@ -507,35 +549,35 @@ drone$weather <- as.factor(drone$weather)
 drone2 <- drone[-c(37,38),]
 
 drone <- drone %>%
-  # Rename Ice levels
-  mutate(Ice = recode(Ice, "Ice" = "Ice", "Open_water" = "Open water"))
+    # Rename Ice levels
+    mutate(Ice = recode(Ice, "Ice" = "Ice", "Open_water" = "Open water"))
 
 
 PredictAngler <- PredictAngler %>%
-  # Rename Ice levels
-  mutate(Ice = recode(Ice, "Ice" = "Ice", "Open_water" = "Open water"))
+    # Rename Ice levels
+    mutate(Ice = recode(Ice, "Ice" = "Ice", "Open_water" = "Open water"))
 
 
 PredictAngler <- PredictAnglerFull %>%
-  # Rename Ice levels
-  mutate(Ice = recode(Ice, "Ice" = "Ice", "Open_water" = "Open water"))
+    # Rename Ice levels
+    mutate(Ice = recode(Ice, "Ice" = "Ice", "Open_water" = "Open water"))
 
 
 
 violin_plot <- ggplot() + 
-  geom_violin(data = drone, aes (x = weekday, y = Anglers), width = 0.8, 
-              fill='#d3d3d3', color="darkblue", trim = FALSE) +
-  # geom_boxplot(data=drone,aes (x = weekday, y = Anglers), width=0.1, color="blue", alpha=0.9) +
-  # geom_dotplot(data=drone,aes (x = weekday, y = Anglers), binaxis='y', stackdir='center', dotsize=1) +
-  geom_jitter(data=drone,aes (x = weekday, y = Anglers),shape=16, position=position_jitter(0.2), alpha=0.5, col="blue") +
-  geom_point(data = PredictAngler, aes (x = weekday, y = exp(fit)), col = 'red', size = 3, alpha = 0.5) +
-  geom_errorbar(data = PredictAngler, aes(x = weekday, ymin = exp(lower), ymax = exp(upper)), col = 'red', size = 1, alpha = 0.5, width = 0.2) +
-  facet_wrap(~Ice) + 
-  labs(x = "", y = "Number of anglers") + 
-  theme_bw() + 
-  theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none") +
+    geom_violin(data = drone, aes (x = weekday, y = Anglers), width = 0.8, 
+                fill='#d3d3d3', color="darkblue", trim = FALSE) +
+    # geom_boxplot(data=drone,aes (x = weekday, y = Anglers), width=0.1, color="blue", alpha=0.9) +
+    # geom_dotplot(data=drone,aes (x = weekday, y = Anglers), binaxis='y', stackdir='center', dotsize=1) +
+    geom_jitter(data=drone,aes (x = weekday, y = Anglers),shape=16, position=position_jitter(0.2), alpha=0.5, col="blue") +
+    geom_point(data = PredictAngler, aes (x = weekday, y = exp(fit)), col = 'red', size = 3, alpha = 0.5) +
+    geom_errorbar(data = PredictAngler, aes(x = weekday, ymin = exp(lower), ymax = exp(upper)), col = 'red', size = 1, alpha = 0.5, width = 0.2) +
+    facet_wrap(~Ice) + 
+    labs(x = "", y = "Number of anglers") + 
+    theme_bw() + 
+    theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none") +
     scale_x_discrete(limits = c("0", "1"),
-                   labels = c("Weekday", "Weekend"))
+                     labels = c("Weekday", "Weekend"))
 
 violin_plot
 ggsave(here ("output", "images", "fig2_violin_fullData.png"), dpi = "print")
@@ -543,18 +585,18 @@ ggsave(here ("output", "images", "fig2_violin_fullData.png"), dpi = "print")
 ## and the same but only for the model with weekdays
 
 violin_plot_second <- ggplot() + 
-  geom_violin(data = drone, aes (x = weekday, y = Anglers), width = 0.8, 
-              fill='#d3d3d3', color="darkblue", trim = FALSE) +
-  # geom_boxplot(data=drone,aes (x = weekday, y = Anglers), width=0.1, color="blue", alpha=0.9) +
-  # geom_dotplot(data=drone,aes (x = weekday, y = Anglers), binaxis='y', stackdir='center', dotsize=1) +
-  geom_jitter(data=drone,aes (x = weekday, y = Anglers),shape=16, position=position_jitter(0.2), alpha=0.5, col="blue") +
-  geom_point(data = PredictSecondBest, aes (x = weekday, y = exp(fit)), col = 'red', size = 3, alpha = 0.5) +
-  geom_errorbar(data = PredictSecondBest, aes(x = weekday, ymin = exp(lower), ymax = exp(upper)), col = 'red', size = 1, alpha = 0.5, width = 0.2) +
-  labs(x = "", y = "Number of anglers") + 
-  theme_bw() + 
-  theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none") +
+    geom_violin(data = drone, aes (x = weekday, y = Anglers), width = 0.8, 
+                fill='#d3d3d3', color="darkblue", trim = FALSE) +
+    # geom_boxplot(data=drone,aes (x = weekday, y = Anglers), width=0.1, color="blue", alpha=0.9) +
+    # geom_dotplot(data=drone,aes (x = weekday, y = Anglers), binaxis='y', stackdir='center', dotsize=1) +
+    geom_jitter(data=drone,aes (x = weekday, y = Anglers),shape=16, position=position_jitter(0.2), alpha=0.5, col="blue") +
+    geom_point(data = PredictSecondBest, aes (x = weekday, y = exp(fit)), col = 'red', size = 3, alpha = 0.5) +
+    geom_errorbar(data = PredictSecondBest, aes(x = weekday, ymin = exp(lower), ymax = exp(upper)), col = 'red', size = 1, alpha = 0.5, width = 0.2) +
+    labs(x = "", y = "Number of anglers") + 
+    theme_bw() + 
+    theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none") +
     scale_x_discrete(limits = c("0", "1"),
-                   labels = c("Weekday", "Weekend"))
+                     labels = c("Weekday", "Weekend"))
 
 violin_plot_second
 
@@ -657,8 +699,6 @@ sum(PredictAngler$total_upper)
 
 # Drone vs. echosounder 
 
-Fernando  can you check that this is all working and produces correct datasets? 
-
 This chunk requires full sonar dataset and cannot be run. But it shows steps needed for producing data for analyses. 
 
 Extract 3 level Kaunas user numbers
@@ -671,10 +711,10 @@ Starting from 2019-01-01, number of deeper users for
 
 ```{r eval = F, include = F, 3df}
 
- #load full database and filter
+#load full database and filter
 
-multi3_df <- readRDS( here("data", "total_lithuania_df")) %>% 
-  dplyr::filter(year_name %in% c("2020", "2019", "2021")) 
+multi3_df <- readRDS( here("data", "lithuania", "total_lithuania_df.rds")) %>% 
+    dplyr::filter(year_name %in% c("2020", "2019", "2021")) 
 
 multi3_sf <- st_as_sf(multi3_df, coords = c("lat", "lon"),  crs=4326)
 
@@ -682,81 +722,83 @@ multi3_sf <- st_as_sf(multi3_df, coords = c("lat", "lon"),  crs=4326)
 # load kaunas shape
 
 kau_shape <- here("data" , "arcgis_layers", "Kaunas_water_reservoir.shp") %>%
-  st_read() %>% 
-  st_transform(4326) #transform crs to wgs84
+    st_read() %>% 
+    st_transform(4326) #transform crs to wgs84
 
 
 ## Filtering data within Kaunas reservoir
 
 kaunas_sf <- 
-  st_join(multi3_sf, kau_shape, join = st_within) %>%  # spatial join to get intersection of points and poly
-  filter(!is.na(NAM))
-  # select(user_id, trip_id, geometry)
+    st_join(multi3_sf, kau_shape, join = st_within) %>%  # spatial join to get intersection of points and poly
+    dplyr::filter(!is.na(NAM))
+# select(user_id, trip_id, geometry)
 
 # Creating df full kaunas
 
 kaunas3_df <- kaunas_sf %>% 
-  st_drop_geometry() %>% # distinct() doesnt like spatial objects
-#  dplyr::filter(date_name >= "2021-01-10",date_name <= "2021-02-28") %>%
- dplyr::filter(year_name %in% c("2020", "2019", "2021")) %>% 
-  dplyr::distinct(user_id, date_name, .keep_all = T) %>% # to count each user only once per day
- # filter(hour_of_day >= 8, hour_of_day <= 11) %>%  #  filter by hour range
-  add_count(date_name, sort = TRUE) %>%  # count users by day
-  distinct(date_name, .keep_all = T)  %>%
-  rename(deeper_count = "n") %>% 
-   dplyr::select(date_name, deeper_count)
+    st_drop_geometry() %>% # distinct() doesnt like spatial objects
+    dplyr::filter(year_name %in% c("2020", "2019", "2021")) %>% 
+    dplyr::distinct(user_id, date_name, .keep_all = T) %>% # to count each user only once per day
+    # filter(hour_of_day >= 8, hour_of_day <= 11) %>%  #  filter by hour range
+    add_count(date_name, sort = TRUE) %>%  # count users by day
+    dplyr::distinct(date_name, .keep_all = T)  %>%
+    dplyr::rename(deeper_count = "n") %>% 
+    dplyr::select(date_name, deeper_count)
 
-write.csv(kaunas3_df, here("data", "kaunas_df.csv"))
+write.csv(kaunas3_df, here("data", "lithuania", "deeper_users", "kaunas3_df.csv"))
 
-
-kaunas3_df <- kaunas_sf %>% 
-  st_drop_geometry() %>% # distinct() doesnt like spatial objects
-  dplyr::filter(date_name >= "2021-01-10",date_name <= "2021-02-28") %>%
-  dplyr::distinct(user_id, date_name, .keep_all = T)
-
-hist(kaunas3_df$hour_of_day, breaks = 23)
 
 # Load shapefile of drone surveyed area
- 
- drone_shp<- here("data" , "arcgis_layers", "drone_flights.shp") %>%
-  st_read() %>% 
-  st_transform(4326) #transform crs to wgs84
- 
- 
+
+drone_shp<- here("data" , "arcgis_layers", "drone_flights.shp") %>%
+    st_read() %>% 
+    st_transform(4326)
+
 ## Filtering data within drone surveyed area
 
+
+# To avoid the error below, swith off the spherical geometry:
+
+#  Error in s2_geography_from_wkb(x, oriented = oriented, check = check) : 
+#   Evaluation error: Found 1 feature with invalid spherical geometry.
+# [1] Loop 0 is not valid: Edge 1 is degenerate (duplicate vertex).
+
+sf::sf_use_s2(use_s2 = FALSE) #> Spherical geometry (s2) switched off
+
 kaunas_drone_sf <- 
-  st_join(multi3_sf, drone_shp, join = st_within) %>%  # spatial join to get intersection of points and poly
-  filter(!is.na(NAM))
-  # select(user_id, trip_id, geometry)
+    sf::st_join(multi3_sf, drone_shp, join = st_within) %>% 
+    # spatial join to get intersection of points and poly
+    dplyr::filter(!is.na(NAM)) 
+
+
 
 # Creating df just drone surveys
 
 kaunas3_drone_df <- kaunas_drone_sf %>% 
-  st_drop_geometry() %>% # distinct() doesnt like spatial objects
- dplyr::filter(year_name %in% c("2020", "2019", "2021")) %>% 
-  dplyr::distinct(user_id, date_name, .keep_all = T) %>% # to count each user only once per day
- # filter(hour_of_day >= 8, hour_of_day <= 11) %>%  #  filter by hour range
-  add_count(date_name, sort = TRUE) %>%  # count users by day
-  distinct(date_name, .keep_all = T)  %>%
-  rename(deeper_count = "n") %>% 
-   dplyr::select(date_name, deeper_count)
+    st_drop_geometry() %>% # distinct() doesnt like spatial objects
+    dplyr::filter(year_name %in% c("2020", "2019", "2021")) %>% 
+    dplyr::distinct(user_id, date_name, .keep_all = T) %>% # to count each user only once per day
+    # filter(hour_of_day >= 8, hour_of_day <= 11) %>%  #  filter by hour range
+    dplyr::add_count(date_name, sort = TRUE) %>%  # count users by day
+    dplyr::distinct(date_name, .keep_all = T)  %>%
+    dplyr::rename(deeper_count = "n") %>% 
+    dplyr::select(date_name, deeper_count)
 
-write.csv(kaunas3_drone_df, here("data", "kaunas_drone_df.csv"))
+write.csv(kaunas3_drone_df,  here("data", "lithuania", "deeper_users", "kaunas3_drone_df.csv"))
 
 # Creating df just drone surveys 6-12
 
 kaunas3612_drone_df <- kaunas_drone_sf %>% 
-  st_drop_geometry() %>% # distinct() doesnt like spatial objects
- dplyr::filter(year_name %in% c("2020", "2019", "2021")) %>% 
-  dplyr::distinct(user_id, date_name, .keep_all = T) %>% # to count each user only once per day
- dplyr::filter(hour_of_day >= 6, hour_of_day <= 12) %>%  #  filter by hour range
-  add_count(date_name, sort = TRUE) %>%  # count users by day
-  distinct(date_name, .keep_all = T)  %>%
-  rename(deeper_count = "n") %>% 
-   dplyr::select(date_name, deeper_count)
+    st_drop_geometry() %>% # distinct() doesnt like spatial objects
+    dplyr::filter(year_name %in% c("2020", "2019", "2021")) %>% 
+    dplyr::distinct(user_id, date_name, .keep_all = T) %>% # to count each user only once per day
+    dplyr::filter(hour_of_day >= 6, hour_of_day <= 12) %>%  #  filter by hour range
+    dplyr::add_count(date_name, sort = TRUE) %>%  # count users by day
+    dplyr::distinct(date_name, .keep_all = T)  %>%
+    dplyr::rename(deeper_count = "n") %>% 
+    dplyr::select(date_name, deeper_count)
 
-write.csv(kaunas3612_drone_df, here("data", "kaunas612_drone_df.csv"))
+write.csv(kaunas3612_drone_df, here("data", "lithuania", "deeper_users", "kaunas3612_drone_df.csv"))
 
 ```
 
@@ -897,66 +939,66 @@ droneDeeperMain$ratioTotal[which(droneDeeperMain$ice2 == 0)]
 #LIKELIHOOD/PRIOR FUNCTIONS ______________________________
 
 log_pdf_exp <- function(x, l){
-  # convert input into vector
-  x = c(x)
-  loglik = log(l)-l*x
-  # sum up loglik values to get lik of whole data
-  loglik_data = sum(loglik)
-  return(loglik_data)
+    # convert input into vector
+    x = c(x)
+    loglik = log(l)-l*x
+    # sum up loglik values to get lik of whole data
+    loglik_data = sum(loglik)
+    return(loglik_data)
 }
 
 log_pdf_uniform <- function(x,lower,upper){ # assumes that x is a single number 
-  # convert input into vector
-  x = c(x)
-  # if the minimum and maximum values of the array lay within the boundaries
-  if (min(x)>lower & max(x)<upper){
-    loglik = -log(upper-lower)
-    # add together one lik value per data point, i.e. multiply lik with length(x)
-    loglik_data = loglik*length(x)
-  }else{ # if at least one of the values is outside boundaries, the lik is -inf
-    loglik_data = -Inf
-  }
-  return(loglik_data)
+    # convert input into vector
+    x = c(x)
+    # if the minimum and maximum values of the array lay within the boundaries
+    if (min(x)>lower & max(x)<upper){
+        loglik = -log(upper-lower)
+        # add together one lik value per data point, i.e. multiply lik with length(x)
+        loglik_data = loglik*length(x)
+    }else{ # if at least one of the values is outside boundaries, the lik is -inf
+        loglik_data = -Inf
+    }
+    return(loglik_data)
 }
 
 log_pdf_normal <- function(x,mu,sd){ 
-  # convert input into vector
-  x = c(x)
-  log_lik = -0.5*log(2*pi*sd^2) - ((x - mu)^2)/(2*sd^2)
-  # sum up loglik values to get lik of whole data
-  loglik_data = sum(log_lik)
-  return(loglik_data)
+    # convert input into vector
+    x = c(x)
+    log_lik = -0.5*log(2*pi*sd^2) - ((x - mu)^2)/(2*sd^2)
+    # sum up loglik values to get lik of whole data
+    loglik_data = sum(log_lik)
+    return(loglik_data)
 }
 
 
 log_pdf_gamma <- function(x,a,b){
-  # convert input into vector
-  x = c(x)
-  log_lik = (a-1)*log(x)+(-b*x)-(log(b)*(-a)+ lgamma(a))
-  # sum up loglik values to get lik of whole data
-  loglik_data = sum(log_lik)
-  return(loglik_data)
+    # convert input into vector
+    x = c(x)
+    log_lik = (a-1)*log(x)+(-b*x)-(log(b)*(-a)+ lgamma(a))
+    # sum up loglik values to get lik of whole data
+    loglik_data = sum(log_lik)
+    return(loglik_data)
 }
 
 
 #____________________________PROPOSAL FUNCTIONS________________________________
 sliding_window <- function(x,windowsize){
-  lower = x-0.5*windowsize
-  upper = x+0.5*windowsize
-  new_x = runif(1, lower, upper)
-  new_x = abs(new_x)
-  hastings_ratio = 0
-  return(c(new_x,hastings_ratio))
+    lower = x-0.5*windowsize
+    upper = x+0.5*windowsize
+    new_x = runif(1, lower, upper)
+    new_x = abs(new_x)
+    hastings_ratio = 0
+    return(c(new_x,hastings_ratio))
 }
 
 
 multiplier_proposal <- function(i,d=1.2){ # d must be > 1!!
-  u <- runif(1)
-  l <- 2*log(d)
-  m <- exp(l*(u-.5))
-  new_x <- i * m
-  hastings_ratio <- log(m)
-  return( c(new_x, hastings_ratio) )
+    u <- runif(1)
+    l <- 2*log(d)
+    m <- exp(l*(u-.5))
+    new_x <- i * m
+    hastings_ratio <- log(m)
+    return( c(new_x, hastings_ratio) )
 }
 
 ```
@@ -992,11 +1034,11 @@ Or we use this part to compare deeper1 and deeper3
 # load(file = "data/droneDeeperMain.RData")
 
 ## by selecting ice2 = 0 or 1 we chose whether to use open water or ice season 
- droneDeeperMain <- droneDeeperMain[which(droneDeeperMain$ice2 ==0),]
+droneDeeperMain <- droneDeeperMain[which(droneDeeperMain$ice2 ==0),]
 # 
- N <- droneDeeperMain$Anglers # drone count
- S <- droneDeeperMain$deeper3 # sonar count in the surveyed area mornings only
- W <- droneDeeperMain$weekday # weekend
+N <- droneDeeperMain$Anglers # drone count
+S <- droneDeeperMain$deeper3 # sonar count in the surveyed area mornings only
+W <- droneDeeperMain$weekday # weekend
 
 #or if we look at every day deeper usage for the whole year in three areas/times
 #load(file = "data/OneYearExtrapol_deeper3.RData")
@@ -1054,60 +1096,60 @@ window_size_update_a = 0.7 #original 0.1
 
 # MCMC loop
 for (iteration in 0:n_iterations){
-  
-  #____PROPOSE NEW PARAMETERS_________
-  # propose new r0
-  proposal_r0 <- sliding_window(r0_current,window_size_update_r0) # use the proposal function and pre-defined window size in our settings to propose a new value for mu
-  new_r0 <- proposal_r0[1]
-  hastings_ratio_r0 <- proposal_r0[2]
-  
-  # propose new a
-  proposal_a <- sliding_window(a_current,window_size_update_a) # same for sigma
-  new_a <- abs(proposal_a[1]) # sigma however cannot be negative, so we use reflection at the boundary (0)
-  hastings_ratio_a <- proposal_a[2]
-  
-  # get overall hastings ratio of new parameter proposals
-  hastings_ratio <- hastings_ratio_r0 + hastings_ratio_a #+ hastings_ratio_b
-  #___________________________________
-  
-  #__________CALC POSTERIOR___________
-  # new likelihood and priors
-  new_r = new_r0 * exp( new_a*W)
-  new_p = 1 - exp( -new_r)
-  new_lik <- sum(dbinom(S, size=N, prob=new_p, log=TRUE)) # calc likelihood under the new proposed parameter values
-  new_prior <- log_pdf_exp(new_r0,r0_rate) + log_pdf_normal(new_a, a_mean, a_sig) #+ log_pdf_normal(new_b, b_mean, b_sig) 
-  #new_prior <- log_pdf_exp(new_r0,r0_rate) + log_pdf_normal(new_a, a_mean, a_sig) + log_pdf_normal(new_b, b_mean, b_sig) # calculate the prior probability of the new parameter values (remember to add together the log-probs of the individual parameters)
-  new_posterior <- new_lik + new_prior # apply Bayes theorem to calculate the new posterior
-  #___________________________________
-  
-  #__________ACCEPTANCE CONDITION___________
-  # calculate posterior ratio 
-  posterior_ratio = new_posterior - posterior_current
-  # get acceptance ratio from posterior ratio and Hastings ratio
-  r = posterior_ratio + hastings_ratio
-  #r
-  # accept or reject
-  random_number = runif(1)
-  if (log(random_number) <= r){
-    # if new state accepted, set current parameters to the new ones
-    r0_current = new_r0
-    a_current = new_a
-    #b_current = new_b
-    p_current = new_p
-    likelihood_current = new_lik
-    prior_current = new_prior
-    posterior_current = new_posterior
-  }
-  # print to screen
-  if (iteration %% print_freq == 0){
-    #print(c(iteration,likelihood_current, prior_current, r0_current, a_current, b_current, mean(p_current)))
-    print(c(iteration,likelihood_current, prior_current, r0_current, a_current, mean(p_current)))
-  }
-  # save to file
-  if (iteration %% sampling_freq == 0){
-    #cat(c(iteration, posterior_current, likelihood_current, prior_current, r0_current, a_current, b_current, mean(p_current),"\n"),sep="\t",file=logfile,append=T)
-    cat(c(iteration, posterior_current, likelihood_current, prior_current, r0_current, a_current, mean(p_current),"\n"),sep="\t",file=logfile,append=T)
-  }
+    
+    #____PROPOSE NEW PARAMETERS_________
+    # propose new r0
+    proposal_r0 <- sliding_window(r0_current,window_size_update_r0) # use the proposal function and pre-defined window size in our settings to propose a new value for mu
+    new_r0 <- proposal_r0[1]
+    hastings_ratio_r0 <- proposal_r0[2]
+    
+    # propose new a
+    proposal_a <- sliding_window(a_current,window_size_update_a) # same for sigma
+    new_a <- abs(proposal_a[1]) # sigma however cannot be negative, so we use reflection at the boundary (0)
+    hastings_ratio_a <- proposal_a[2]
+    
+    # get overall hastings ratio of new parameter proposals
+    hastings_ratio <- hastings_ratio_r0 + hastings_ratio_a #+ hastings_ratio_b
+    #___________________________________
+    
+    #__________CALC POSTERIOR___________
+    # new likelihood and priors
+    new_r = new_r0 * exp( new_a*W)
+    new_p = 1 - exp( -new_r)
+    new_lik <- sum(dbinom(S, size=N, prob=new_p, log=TRUE)) # calc likelihood under the new proposed parameter values
+    new_prior <- log_pdf_exp(new_r0,r0_rate) + log_pdf_normal(new_a, a_mean, a_sig) #+ log_pdf_normal(new_b, b_mean, b_sig) 
+    #new_prior <- log_pdf_exp(new_r0,r0_rate) + log_pdf_normal(new_a, a_mean, a_sig) + log_pdf_normal(new_b, b_mean, b_sig) # calculate the prior probability of the new parameter values (remember to add together the log-probs of the individual parameters)
+    new_posterior <- new_lik + new_prior # apply Bayes theorem to calculate the new posterior
+    #___________________________________
+    
+    #__________ACCEPTANCE CONDITION___________
+    # calculate posterior ratio 
+    posterior_ratio = new_posterior - posterior_current
+    # get acceptance ratio from posterior ratio and Hastings ratio
+    r = posterior_ratio + hastings_ratio
+    #r
+    # accept or reject
+    random_number = runif(1)
+    if (log(random_number) <= r){
+        # if new state accepted, set current parameters to the new ones
+        r0_current = new_r0
+        a_current = new_a
+        #b_current = new_b
+        p_current = new_p
+        likelihood_current = new_lik
+        prior_current = new_prior
+        posterior_current = new_posterior
+    }
+    # print to screen
+    if (iteration %% print_freq == 0){
+        #print(c(iteration,likelihood_current, prior_current, r0_current, a_current, b_current, mean(p_current)))
+        print(c(iteration,likelihood_current, prior_current, r0_current, a_current, mean(p_current)))
+    }
+    # save to file
+    if (iteration %% sampling_freq == 0){
+        #cat(c(iteration, posterior_current, likelihood_current, prior_current, r0_current, a_current, b_current, mean(p_current),"\n"),sep="\t",file=logfile,append=T)
+        cat(c(iteration, posterior_current, likelihood_current, prior_current, r0_current, a_current, mean(p_current),"\n"),sep="\t",file=logfile,append=T)
+    }
 }
 
 
@@ -1139,45 +1181,45 @@ aq <- c(quantile(fit$a, probs = 0.025),quantile(fit$a, probs = 0.100),quantile(f
 pq <- c(quantile(fit$p, probs = 0.025),quantile(fit$p, probs = 0.100),quantile(fit$p, probs = 0.500),quantile(fit$p, probs = 0.900),quantile(fit$p, probs = 0.975))
 knitr::kable(rbind(r0q,aq,pq), digits= 3)
 
-  
+
 pd_r0 <-  ggplot(data=fit, aes(x = r0)) + 
-      geom_density(fill = "wheat") +
-      labs(
+    geom_density(fill = "wheat") +
+    labs(
         x    = "r0",
         y    = "Probability density"
-      ) + 
-     theme_bw() +
-      theme(panel.border = element_blank(), 
-            panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none", axis.text.y = element_blank(), axis.text.x = element_text(size = 10), axis.title.x = element_text(size = 12)) 
+    ) + 
+    theme_bw() +
+    theme(panel.border = element_blank(), 
+          panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none", axis.text.y = element_blank(), axis.text.x = element_text(size = 10), axis.title.x = element_text(size = 12)) 
 
 pd_a <- ggplot(data=fit, aes(x = a)) + 
-      geom_density(fill = "wheat") +
-      labs(
+    geom_density(fill = "wheat") +
+    labs(
         x    = "a",
         y    = "Probability density"
-      ) + 
-     theme_bw() +
-        theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none", axis.title.y = element_blank(), axis.text.y = element_blank(), axis.text.x = element_text(size = 10), axis.title.x = element_text(size = 12)) 
+    ) + 
+    theme_bw() +
+    theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none", axis.title.y = element_blank(), axis.text.y = element_blank(), axis.text.x = element_text(size = 10), axis.title.x = element_text(size = 12)) 
 
 pd_prior <- ggplot(data=fit, aes(x = prior)) + 
-      geom_density(fill = "wheat") +
-      labs(
+    geom_density(fill = "wheat") +
+    labs(
         x    = "prior",
         y    = "Probability density"
-      ) + 
-     theme_bw() +
-        theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none", axis.title.y = element_blank(), axis.text.y = element_blank(), axis.text.x = element_text(size = 10), axis.title.x = element_text(size = 12)) 
+    ) + 
+    theme_bw() +
+    theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none", axis.title.y = element_blank(), axis.text.y = element_blank(), axis.text.x = element_text(size = 10), axis.title.x = element_text(size = 12)) 
 
 pd_p <- ggplot(data=fit, aes(x = p)) + 
-      geom_density(fill = "wheat") +
-      labs(
+    geom_density(fill = "wheat") +
+    labs(
         x    = "p",
         y    = "Probability density"
-      ) + 
-     theme_bw() +
-        theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none", axis.title.y = element_blank(), axis.text.y = element_blank(), axis.text.x = element_text(size = 10), axis.title.x = element_text(size = 12)) +
-  #geom_text(x=0.0265, y=130, label= "Open water", size = 5, fontface = 3)
-  geom_text(x=0.19, y=25, label= "Ice", size = 5, fontface = 3)
+    ) + 
+    theme_bw() +
+    theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none", axis.title.y = element_blank(), axis.text.y = element_blank(), axis.text.x = element_text(size = 10), axis.title.x = element_text(size = 12)) +
+    #geom_text(x=0.0265, y=130, label= "Open water", size = 5, fontface = 3)
+    geom_text(x=0.19, y=25, label= "Ice", size = 5, fontface = 3)
 
 plot_grid(pd_r0, pd_a, pd_p, labels = NULL, ncol = 3, nrow =1)
 
@@ -1271,7 +1313,7 @@ sum(angler_50q_o)
 sum(angler_025q_o)
 sum(angler_975q_o)
 
-## to fully propagate error we get lower and upper intevals also from useing lower and upper intervals of angler proportion (in Table 2)
+## to fully propagate error we get lower and upper intervals also from using lower and upper intervals of angler proportion (in Table 2)
 sum(angler_50q_o)/0.255
 sum(angler_025q_o)/0.232
 sum(angler_975q_o)/0.28
