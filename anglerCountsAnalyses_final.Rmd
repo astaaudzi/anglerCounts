@@ -31,6 +31,8 @@ options(allow_html_in_all_outputs=TRUE)
 
 # Libraries
 
+Fernando - which packages do we actually need?
+
 ```{r library}
 
 #rm(list = ls()) # clear memory
@@ -46,189 +48,115 @@ pacman::p_load(tidyverse,ggplot2, tidyr, janitor, data.table, here, skimr, lubri
 
 ```
 
-# Fig 1: map
+# Fig S1: map
 
 Map of Central Europe with area around Kaunas Reservoir as an inset. 
-the main map should show Kaunas Water reservoir as light gray, 
+the main map shows Kaunas Water reservoir as light gray as well as  
 - drone trajectories
 - spots for visual counts on ice
 
+Fernando can you please modify the final figure 1 with a few points I indicated below? Thanks
+
 ```{r fig1, echo=TRUE}
 
-
-# mapdata <- getData("GADM", country = "lithuania", level = 2)
-# mymap <- fortify(mapdata)
-# 
-# drones.sf <- st_as_sf(droneTrajectories, coords = c("V2", "V1"), crs = 4326) 
-
-
-# ggplot() + geom_sf(data = europe) + theme_bw()
-# 
-# ggplot(data = world) +
-#     geom_sf() +
-#     geom_point(data = droneTrajectories, aes(x = V2, y = V1), size = 1, 
-#         shape = 1, color = "orange") +
-#      coord_sf(ylim = c(54.7, 55.0), xlim = c(24.0, 24.3), expand = FALSE) + 
-#       xlab("Longitude") + ylab("Latitude") +
-#   ggtitle("Survey area") +
-#   theme_bw()
-
-
-# height <- max(droneTrajectories$V1) - min(droneTrajectories$V1)
-# width <- max(droneTrajectories$V2) - min(droneTrajectories$V2)
-# kau_borders <- c(bottom  = min(droneTrajectories$V1)  - 0.2 * height, 
-#                  top     = max(droneTrajectories$V1)  + 0.2 * height,
-#                  left    = min(droneTrajectories$V2) - 0.2 * width,
-#                  right   = max(droneTrajectories$V2) + 0.2 * width)
-# 
-# 
-# # Toner
-# 
-# map <- get_stamenmap(kau_borders, zoom = 12, maptype = "toner-background")
-# 
-# ggmap(map) +
-#   geom_point(droneTrajectories, mapping = aes (x = V2, y = V1), color = "red", size = 1 )
-# 
-# ggsave(here ("output", "images", "map.png"))
-# 
-# 
-
-# 
-# ggsave(here ("output", "images", "map1.png"))
-# 
-# 
-# # Toner lite
-# 
-# map2 <- get_stamenmap(kau_borders, zoom = 12, maptype = "toner-lite")
-# 
-# ggmap(map2) +
-#   geom_point(droneTrajectories, mapping = aes (x = V2, y = V1), color = "red", size = 1 )
-# 
-# ggsave(here ("output", "images", "map2.png"))
-# 
-# # Terrain
-# 
-# map3 <- get_stamenmap(kau_borders, zoom = 12, maptype = "terrain")
-# 
-# ggmap(map3) +
-#   geom_point(droneTrajectories, mapping = aes (x = V2, y = V1), color = "red", size = 1 )
-# 
-# ggsave(here ("output", "images", "map3.png"))
-# 
-# 
-# # With qmplot
-# 
-# qmplot(x = V2, y = V1, data = droneTrajectories, maptype = "terrain", 
-#        geom = "point", zoom = 13) 
-
-
-# droneTrajectories <- read.table(file = "data/droneTrajectory/KaunoMarios_MisijaWhole.txt")
-#updated data is in plannedTrajectory_north.xls and _south, where two trajectories are separated. If you want more points you can use the actual trajectory
-
-
-drone_north <- read_xlsx("data/droneTrajectory/PlannedTrajectory_north.xlsx")
-drone_south <- read_excel("data/droneTrajectory/PlannedTrajectory_south.xlsx")
+drone_north <- read_xlsx("data/PlannedTrajectory_north.xlsx")
+drone_south <- read_excel("data/PlannedTrajectory_south.xlsx")
 visual_coords <- read.table(file = "data/visual_coordinates.txt") %>% 
   rename(Latitude = V1, Longitude = V2) %>% 
   mutate(Latitude = str_sub(Latitude,1, nchar(Latitude)-1)) %>% 
   mutate(across(where(is.character), as.numeric))
 
+#Alternative terrain background
 
-data_map <- gdata::combine(drone_north,drone_south,visual_coords) %>% 
-  mutate(source = as.factor(source))
-  
-summary(visual_coords)
-summary(drone_north)
-summary(data_map)
+droneTrajectories <- read.table(file = "data/droneTrajectory/KaunoMarios_MisijaWhole.txt")
+drones.sf <- st_as_sf(droneTrajectories, coords = c("V2", "V1"), crs = 4326)
+height <- max(droneTrajectories$V1) - min(droneTrajectories$V1)
+width <- max(droneTrajectories$V2) - min(droneTrajectories$V2)
+kau_borders <- c(bottom  = min(droneTrajectories$V1)  - 0.5 * height,
+                 top     = max(droneTrajectories$V1)  + 0.5 * height,
+                 left    = min(droneTrajectories$V2) - 1.3 * width,
+                 right   = max(droneTrajectories$V2) + 0.5 * width)
+
+#remove first and last trajectory points for better line plotting
+drone_south <- drone_south[c(3:97),]
+drone_north <- drone_north[c(3:67),]
+#remove visual observation spots outside the surveyed area
+visual_coords1 <- visual_coords %>% filter (Longitude > 24.10)
+
+
+stamen <- get_stamenmap(kau_borders, zoom = 11, maptype = "terrain-background")
+
+## Fernando, can we add a scale to this main map? We need to add a line indicating 5km scale. Also rename axes labels to longitude and latitude
+
+g1 <- ggmap(stamen)+
+    geom_path(drone_south, mapping = aes (x = Longitude, y = Latitude), color = "yellow", size = 1.0 )+
+  geom_path(drone_north, mapping = aes (x = Longitude, y = Latitude), color = "blue", size = 1.0)+
+  geom_point(visual_coords1, mapping = aes (x = Longitude, y = Latitude), color = "red", size = 2.5 ) +
+  geom_text(x=23.97, y=54.91, label= "Kaunas city", size = 5, fontface = 2) +
+    theme(
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(),
+    axis.title.x = element_text(size=14),
+    axis.title.y = element_text(size=14),
+    axis.text=element_text(size=8)
+  )
+
+g1  
 
 # Creating inset
 
-# world <- ne_countries(scale = "medium", returnclass = "sf")
-# europe_cropp <- st_crop(world, xmin = -5, xmax = 35,
-#                                     ymin = 40, ymax = 60)
+world <- ne_countries(scale = "medium", returnclass = "sf")
+europe_cropp <- st_crop(world, xmin = 5, xmax = 35,
+                                  ymin = 50, ymax = 63)
 
 kau_shape <- here("data" , "kaunas", "Kaunas_water_reservoir.shp") %>%
   st_read() %>% 
   st_transform(4326) #transform crs to wgs84
-# 
-# lit_shape <- here("data" , "lithuania", "lt_100km.shp") %>%
-#   st_read() %>% 
-#   st_transform(4326) #transform crs to wgs84
+ 
+lit_shape <- here("data" , "lithuania", "lt_100km.shp") %>%
+  st_read() %>%
+  st_transform(4326) #transform crs to wgs84
 
 kau_bb = st_as_sfc(st_bbox(kau_shape)) 
-# lit_bb = st_as_sfc(st_bbox(lit_shape)) 
+lit_bb = st_as_sfc(st_bbox(lit_shape)) 
 
-# g1 <-   ggplot() + 
-#   geom_sf(data = europe_cropp, fill = "white", color = "black", size = 0.1) + 
-#   geom_sf(data = lit_bb, fill = NA, color = "red", size = 1) +
-#   geom_sf(data = kau_bb, fill = NA, color = "red", size = 1) +
-#   theme_void()
-# 
-#   g1
-
-# Kaunas main map  
-  
-
-kaunas_map <- fortify(kau_shape) #'fortify' the data to get a dataframe format required by ggplot2
-
-# cols <- c("red", "blue", "green")
-  
-# g2 <- ggplot2::ggplot() +
-#   geom_sf(data = kaunas_map, fill = "light grey", color = "black", size = 0.5) +
-#   # geom_point(data_map, mapping = aes (x = Longitude, y = Latitude, color = source)) +
-#   geom_point(drone_south, mapping = aes (x = Longitude, y = Latitude), color = "orange", size = 0.1 )+
-#   geom_point(drone_north, mapping = aes (x = Longitude, y = Latitude), color = "orange", size = 0.1 )+
-#   geom_point(visual_coords, mapping = aes (x = Longitude, y = Latitude), color = "red", size = 3 ) +
-#   theme_light() + theme(panel.grid.major = element_blank(),
-#                         panel.grid.minor = element_blank(),)
-
-#remove first and last trajectory points 
-drone_south <- drone_south[c(3:97),]
-drone_north <- drone_north[c(3:67),]
-visual_coords1 <- visual_coords %>% filter (Longitude > 24.10)
-
-g2 <- ggplot2::ggplot() +
-  geom_sf(data = kaunas_map, fill = "light blue", color = "black", size = 0.5) +
-  # geom_point(data_map, mapping = aes (x = Longitude, y = Latitude, color = source)) +
-  geom_path(drone_south, mapping = aes (x = Longitude, y = Latitude), color = "yellow2", size = 1.5 )+
-  geom_path(drone_north, mapping = aes (x = Longitude, y = Latitude), color = "yellow2", size = 1.5 )+
-  geom_point(visual_coords1, mapping = aes (x = Longitude, y = Latitude), color = "blue", size = 2 ) +
-  theme_light() + theme(panel.grid.major = element_blank(),
-                        panel.grid.minor = element_blank(), 
-                        axis.title.x = element_blank(),
-                        axis.title.y = element_blank(),
-    axis.text=element_text(size=10))
+g2 <-   ggplot() +
+  geom_sf(data = europe_cropp, fill = "gray96", color = "gray60", size = 0.3) +
+  geom_sf(data = lit_bb, fill = NA, color = "blue", size = 0.8) +
+  geom_sf(data = kau_bb, fill = "darkblue", color = "darkblue", size = 1) +
+  theme_void()
 
 g2
 
+## Fernando, some work is needed here too please. We need some fill for the inset and move it to the bottom left corner. Also 
+## combine plots
+fig1 <- ggdraw() +
+  draw_plot(g1) +
+  draw_plot(g2, x = 0.15, y = 0.1, width = 0.4, height = 0.4)
 
-# gg_inset_map1 = ggdraw() +
-#   draw_plot(g2) +
-#   draw_plot(g1, x = 0.15, y = 0.1, width = 0.4, height = 0.4)
-# gg_inset_map1
-# 
-# ggsave(here ("output", "images", "fig1_void_inset.png"), dpi = "print")
+fig1
+#ggsave(here ("output", "images", "fig1.png"), dpi = "print")
 
 
+# data_map <- gdata::combine(drone_north,drone_south,visual_coords) %>% 
+#   mutate(source = as.factor(source))
 
-# Alternative terrain background
-# 
-# droneTrajectories <- read.table(file = "data/droneTrajectory/KaunoMarios_MisijaWhole.txt")
-# drones.sf <- st_as_sf(droneTrajectories, coords = c("V2", "V1"), crs = 4326)
-# height <- max(droneTrajectories$V1) - min(droneTrajectories$V1)
-# width <- max(droneTrajectories$V2) - min(droneTrajectories$V2)
-# kau_borders <- c(bottom  = min(droneTrajectories$V1)  - 0.2 * height,
-#                  top     = max(droneTrajectories$V1)  + 0.2 * height,
-#                  left    = min(droneTrajectories$V2) - 0.7 * width,
-#                  right   = max(droneTrajectories$V2) + 0.2 * width)
-# 
-# stamen <- get_stamenmap(kau_borders, zoom = 12, maptype = "terrain-background")
-# 
-# ggmap(stamen)+
-#     geom_point(drone_south, mapping = aes (x = Longitude, y = Latitude), color = "yellow", size = 0.1 )+
-#   geom_point(drone_north, mapping = aes (x = Longitude, y = Latitude), color = "blue", size = 0.1 )+
-#   geom_point(visual_coords, mapping = aes (x = Longitude, y = Latitude), color = "red", size = 3 ) 
+# Kaunas main map  
+#kaunas_map <- fortify(kau_shape) #'fortify' the data to get a dataframe format required by ggplot2
 
+# cols <- c("red", "blue", "green")
+
+# g2 <- ggplot2::ggplot() +
+#   geom_sf(data = kaunas_map, fill = "light blue", color = "black", size = 0.5) +
+#   # geom_point(data_map, mapping = aes (x = Longitude, y = Latitude, color = source)) +
+#   geom_path(drone_south, mapping = aes (x = Longitude, y = Latitude), color = "yellow2", size = 1.5 )+
+#   geom_path(drone_north, mapping = aes (x = Longitude, y = Latitude), color = "yellow2", size = 1.5 )+
+#   geom_point(visual_coords1, mapping = aes (x = Longitude, y = Latitude), color = "blue", size = 2 ) +
+#   theme_light() + theme(panel.grid.major = element_blank(),
+#                         panel.grid.minor = element_blank(), 
+#                         axis.title.x = element_blank(),
+#                         axis.title.y = element_blank(),
+#     axis.text=element_text(size=10))
 
 
 ```
@@ -236,10 +164,10 @@ g2
 
 # Read and process drone data and coordinates
 
+This chunk does not need to be run, because processed data is saved into drones_df_full.RData files
+
 ```{r drone_deeper, include = F, eval = F, echo = F}
 # first read in all drone data, including note on whether the angler is on the shore or in the boat 
-# Fernando can you please paste your code on how you process drone data to get into one dataframe. Or alternatively put the full dataframe in the data folder here. We need F and G columns from excel, which indicate the total number of anglers (F) and how many of these anglers were in a boat (G)
-
 
 # load drone data
 # Sys.setlocale(, "lithuanian")
@@ -285,12 +213,9 @@ drone_summary <- drones_df %>% group_by(date_name) %>% summarise(anglers = n())
 
 ### Get deeper coordinates for drone data
 
-This section does not need to be run and we cannot provide the full echosounder dataset. It just shows how the coordinates are extracted for the specific days when drone surveys were conducted. It saves files at the end
+This section does not need to be run, and full echosounder data cannot be provided publicly due to data sharing agreement with the company. The section just shows how the coordinates are extracted for the specific days when drone surveys were conducted. It saves files at the end
 
 ```{r, eval = F, echo = F, include = F}
-#Load deeper data (not provided here)
-# multipoint_df <- readRDS( here("data", "multipoint_df.rds"))
-# i moved the multipoint dataset from data directory, because it is committed to github and we don't want this folder to be public. Plus it is a big file. Other datasets are in otherData folder which is not committed 
 
 multipoint_df <- readRDS( file = "otherData/multipoint_df.rds")
 
@@ -302,14 +227,13 @@ multipoint_df <- readRDS( file = "otherData/multipoint_df.rds")
   dplyr::mutate(type = "deeper") %>% 
    dplyr::distinct(user_id, date_name,lat, lon, .keep_all = T)
  
- 
+
  # filter by hour of day
  
- deeper_df_812 <- deeper_df %>% 
+ deeper_df_612 <- deeper_df %>% 
        dplyr::filter(hour_of_day >= 6, hour_of_day <= 12)   #  filter by hour range
  
-   
-# Bind deeper and dron dfs
+  # Bind deeper and dron dfs
  
  deeper_drone_df <- dplyr::bind_rows(deeper_df,drones_df) %>% 
   mutate(lat = round(lat,4)) %>% 
@@ -320,7 +244,7 @@ multipoint_df <- readRDS( file = "otherData/multipoint_df.rds")
 
  # Hour filtered version
  
- deeper_drone_df_812 <- dplyr::bind_rows(deeper_df_812,drones_df) %>% 
+ deeper_drone_df_612 <- dplyr::bind_rows(deeper_df_612,drones_df) %>% 
   mutate(lat = round(lat,4)) %>% 
   mutate(lon = round(lon,4)) %>% 
   mutate(across(c(user_id, date_name, trip_id,  type),factor)) %>% 
@@ -331,7 +255,7 @@ multipoint_df <- readRDS( file = "otherData/multipoint_df.rds")
  # Create spatial objects
 
  deeper_drone_sf <- st_as_sf(deeper_drone_df, coords = c("lon", "lat"),  crs=4326)
- deeper_drone_sf_812 <- st_as_sf(deeper_drone_df_812, coords = c("lon", "lat"),  crs=4326)
+ deeper_drone_sf_612 <- st_as_sf(deeper_drone_df_612, coords = c("lon", "lat"),  crs=4326)
  
  # Load shapefile of kaunas
  
@@ -361,8 +285,8 @@ deeper_drone_surveyed_area <-
 # filter points within area and time range
 
  
-deeper_drone_surveyed_area_812 <- 
-  st_join(deeper_drone_sf_812, drone_shp, join = st_within) %>% 
+deeper_drone_surveyed_area_612 <- 
+  st_join(deeper_drone_sf_612, drone_shp, join = st_within) %>% 
   filter(!is.na(NAM)) # spatial join to get intersection of points and poly
 
 # save(deeper_drone_kaunas, file = "data/deeper_drone_kaunas40days.RData")
@@ -373,6 +297,9 @@ deeper_drone_surveyed_area_812 <-
 
 ## Fig. S2: Map drone vs deeper
 
+Fernando, I cannot find these RData files in the directory anglerCounts_git/data or anywehre in our shared folders
+I found three csv files - are they the same? I can see them on github online, but they are 3 months old, so I am not sure these are the latest files. Can you please check that this chunk can be run and data is available. We also need to produce a few plots saved to the output/ folder which I can add to the manuscript
+
 ```{r map_drone}
 
 load(file = "data/drones_df_full.RData")
@@ -381,7 +308,7 @@ load(file = "data/deeper_drone_kaunas_survarea.RData")
 load(file = "data/deeper_drone_kaunas_surv612.RData")
 
  deeper_drone_sf <- st_as_sf(deeper_drone_kaunas, coords = c("lon", "lat"),  crs=4326)
- deeper_drone_sf_812 <- st_as_sf(deeper_drone_surveyed_area_812, coords = c("lon", "lat"),  crs=4326)
+ deeper_drone_sf_612 <- st_as_sf(deeper_drone_surveyed_area_612, coords = c("lon", "lat"),  crs=4326)
 
   kaunas_shp<- here("data" , "arcgis_layers", "Kaunas_water_reservoir.shp") %>%
   st_read() %>% 
@@ -401,10 +328,10 @@ unique(deeper_drone_kaunas$date_name)
 # [25] 2020-07-18 2020-07-09 2020-11-21 2020-03-23 2020-12-13 2020-09-19 2020-05-15 2020-08-04 2020-08-28 2020-09-24 2020-12-09 2020-10-14
 # [37] 2020-09-11 2021-02-19 2021-02-24 2021-02-27
 
-deeper_drone_surveyed_area_812 %>% 
+#deeper_drone_surveyed_area_812 %>% 
 #deeper_drone_surveyed_area %>% 
-#deeper_drone_kaunas %>% 
-   filter(date_name %in% c("2020-05-26")) %>% 
+deeper_drone_kaunas %>% 
+   filter(date_name %in% c("2021-01-21")) %>% 
 leaflet() %>% 
   addTiles() %>%
   addCircles(weight = 2, 
@@ -414,12 +341,11 @@ leaflet() %>%
    # title = "Echosounder vs. drone observations",
  # title = "Echosounder vs. drone observations, between 8-12h",
     #opacity = 1)
-  
 
 
 ```
 
-# Drone vs.land-based stats
+# Table S2: Drone vs.land-based stats
 
 ```{r dronevsland}
 
@@ -471,7 +397,7 @@ And this one is very good!
 https://cran.r-project.org/web/packages/jtools/vignettes/summ.html
 
 
-```{r}
+```{r, eval = T, echo = T}
 library(lme4)
 library(effects)
 library(MuMIn)
@@ -509,8 +435,8 @@ hist(log(drone$Anglers), breaks = 30)
 # Full model 
 anglerModel1 <- lm(log(Anglers) ~ 1+ season + Ice*weekday + weather*weekday + Temp, data = drone)
 summary(anglerModel1) #this model explains 35% of variance
-plot(anglerModel1)  #we can see that observations 32 and especially 37, 38 are clear outliers. So we might consider removing them 
-
+plot(anglerModel1)  
+#we can see that observations 32 and especially 37, 38 are clear outliers. So we might consider removing them 
 
 drone2 <- drone[-c(37,38),]
 anglerModel1 <- lm(log(Anglers) ~ 1+ season + Ice*weekday + weather*weekday + Temp, data = drone2)
@@ -566,7 +492,9 @@ PredictSecondBest<- as.data.frame(Effect(c('weekday'),ModelWeekend))
 
 ## Fig 2: model prediction
 
-```{r}
+Note the x axis position of the observations will vary every time you produce a plot because we use geom_jitter command to spread the points randomly along the x axis. 
+
+```{r, eval = T, echo = T}
 load(file = "output/Predict_ModelBest.RData")
 load(file = "output/Predict_ModelSecondBest.RData")
 
@@ -577,16 +505,6 @@ drone$Ice <- as.factor(drone$Ice)
 drone$weekday <- as.factor(drone$weekday)
 drone$weather <- as.factor(drone$weather)
 drone2 <- drone[-c(37,38),]
-
-# ggplot() + 
-#     geom_point(data = drone, aes (x = weekday, y = Anglers)) +
-#     geom_point(data = PredictAngler, aes (x = weekday, y = fit), col = 'red', size = 3, alpha = 0.5) +
-#     facet_wrap(~Ice) + 
-#     geom_errorbar(data = PredictAngler, aes(x = weekday, ymin = lower, ymax = upper), col = 'red', size = 1, alpha = 0.5, width = 0.2) +
-#     labs(x = "Weekday/weekend", y = "Number of anglers") + 
-#     theme_bw()  + 
-#        theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none")
-
 
 drone <- drone %>%
   # Rename Ice levels
@@ -603,9 +521,6 @@ PredictAngler <- PredictAnglerFull %>%
   mutate(Ice = recode(Ice, "Ice" = "Ice", "Open_water" = "Open water"))
 
 
-# PredictAngler2 <- PredictSecondBest %>%
-#   # Rename Ice levels
-#   mutate(Ice = recode(Ice, "Ice" = "Ice", "Open_water" = "Open water"))
 
 violin_plot <- ggplot() + 
   geom_violin(data = drone, aes (x = weekday, y = Anglers), width = 0.8, 
@@ -648,29 +563,36 @@ ggsave(here ("output", "images", "fig2_violin_second.png"), dpi = "print")
 
 ```
 
-### predict angler numbers
+### Table 1: predict angler numbers
 
 ```{r}
+## Model with weekend and ice interaction, two outlier days excluded
 load(file = "output/Predict_ModelBest.RData")
+## Model with weekend effect only, two outlier days excluded
 load(file = "output/Predict_ModelSecondBest.RData")
+## Model with weekend and ice interaction, no outlier points excluded
 load(file = "output/Predict_ModelBestFull.RData")
+
+# Daily records of sonar users in three datasets (same area and mornings only - deeper3, same area all day - deeper2, and all water reservoir all day - deeper1)
 load(file = "data/OneYearExtrapol_deeper3.RData")
 
 #vector of day weekdays with ice, weekends with ice, weekdays open water, weekend open water
 #Let's assume that 10% of days are with ice (about one month of ice cover per year)
 #assumed_days <- c(26, 10, 236, 93)
 
-length(extrapData$weekend[which(extrapData$ice == 0 & extrapData$weekend == 0)])
-length(extrapData$weekend[which(extrapData$ice == 0 & extrapData$weekend == 1)])
-length(extrapData$weekend[which(extrapData$ice == 1 & extrapData$weekend == 0)])
-length(extrapData$weekend[which(extrapData$ice == 1 & extrapData$weekend == 1)])
+#how many weekdays and weekends of open water and ice fishing?
+length(extrapData$weekday[which(extrapData$ice == 0 & extrapData$weekday == 0)])
+length(extrapData$weekday[which(extrapData$ice == 0 & extrapData$weekday == 1)])
+length(extrapData$weekday[which(extrapData$ice == 1 & extrapData$weekday == 0)])
+length(extrapData$weekday[which(extrapData$ice == 1 & extrapData$weekday == 1)])
 
 assumed_days <- c(35, 14, 225, 91) #ice weekdays, ice weekends, open weekdays, open weekends
 
-#to assess for open water season only, set 0 to ice days
-assumed_days <- c(0, 0, 225, 91)
-# for for ice only
-assumed_days <- c(35, 14, 0, 0)
+## or apply only for open water and ice fishing seasons separately
+# #to assess for open water season only, set 0 to ice days
+# assumed_days <- c(0, 0, 225, 91)
+# # for for ice only
+# assumed_days <- c(35, 14, 0, 0)
 
 #or we can assume that there is no ice at all 
 #assumed_days <- c(0, 0, 262, 103)
@@ -681,14 +603,10 @@ PredictAngler$total_mean <- PredictAngler$days * exp(PredictAngler$fit)
 PredictAngler$total_lower <- PredictAngler$days * exp(PredictAngler$lower)
 PredictAngler$total_upper <- PredictAngler$days * exp(PredictAngler$upper)
 
+# numbers in the Total number column of Table 1 from linear model
 sum(PredictAngler$total_mean)
 sum(PredictAngler$total_lower)
 sum(PredictAngler$total_upper)
-
-#Drone surveys area only covers ca 2/3 of the total area. So we would need to divice by 0.66
-sum(PredictAngler$total_mean)/0.66
-sum(PredictAngler$total_lower)/0.66
-sum(PredictAngler$total_upper)/0.66
 
 #same with the full model without outliers
 PredictAnglerFull$days <- assumed_days
@@ -697,15 +615,12 @@ PredictAnglerFull$total_mean <- PredictAnglerFull$days * exp(PredictAnglerFull$f
 PredictAnglerFull$total_lower <- PredictAnglerFull$days * exp(PredictAnglerFull$lower)
 PredictAnglerFull$total_upper <- PredictAnglerFull$days * exp(PredictAnglerFull$upper)
 
+## if we include two outlier days the mean is slightly lower, but confidence intervals are much wider
 sum(PredictAnglerFull$total_mean)
 sum(PredictAnglerFull$total_lower)
 sum(PredictAnglerFull$total_upper)
 
-#Drone surveys area only covers ca 2/3 of the total area. So we would need to divice by 0.66
-sum(PredictAnglerFull$total_mean)/0.66
-sum(PredictAnglerFull$total_lower)/0.66
-sum(PredictAnglerFull$total_upper)/0.66
-
+## Now if we only use the second best model that does not include ice effect we only need two values for extrapolation
 #same with the second best model without outliers
 assumed_days <- c(262, 103)
 PredictSecondBest$days <- assumed_days
@@ -714,23 +629,11 @@ PredictSecondBest$total_mean <- PredictSecondBest$days * exp(PredictSecondBest$f
 PredictSecondBest$total_lower <- PredictSecondBest$days * exp(PredictSecondBest$lower)
 PredictSecondBest$total_upper <- PredictSecondBest$days * exp(PredictSecondBest$upper)
 
+## Results are  similar 
 sum(PredictSecondBest$total_mean)
 sum(PredictSecondBest$total_lower)
 sum(PredictSecondBest$total_upper)
 
-#Drone surveys area only covers ca 2/3 of the total area. So we would need to divice by 0.66
-sum(PredictSecondBest$total_mean)/0.66
-sum(PredictSecondBest$total_lower)/0.66
-sum(PredictSecondBest$total_upper)/0.66
-
-
-
-# > sum(PredictAngler$total_mean)
-# [1] 25795.34
-# > sum(PredictAngler$total_lower)
-# [1] 18333.12
-# > sum(PredictAngler$total_upper)
-# [1] 33284.23
 
 #no days with ice (10% of days)
 assumed_days <- c(0, 0, 262, 103)
@@ -754,7 +657,11 @@ sum(PredictAngler$total_upper)
 
 # Drone vs. echosounder 
 
-### extract 3 level Kaunas user numbers
+Fernando  can you check that this is all working and produces correct datasets? 
+
+This chunk requires full sonar dataset and cannot be run. But it shows steps needed for producing data for analyses. 
+
+Extract 3 level Kaunas user numbers
 
 Starting from 2019-01-01, number of deeper users for
 1) all Kaunas reservoir, all day
@@ -762,7 +669,7 @@ Starting from 2019-01-01, number of deeper users for
 3) smaller area, only 6am to 12pm. 
 
 
-```{r 3df}
+```{r eval = F, include = F, 3df}
 
  #load full database and filter
 
@@ -790,6 +697,7 @@ kaunas_sf <-
 
 kaunas3_df <- kaunas_sf %>% 
   st_drop_geometry() %>% # distinct() doesnt like spatial objects
+#  dplyr::filter(date_name >= "2021-01-10",date_name <= "2021-02-28") %>%
  dplyr::filter(year_name %in% c("2020", "2019", "2021")) %>% 
   dplyr::distinct(user_id, date_name, .keep_all = T) %>% # to count each user only once per day
  # filter(hour_of_day >= 8, hour_of_day <= 11) %>%  #  filter by hour range
@@ -798,8 +706,15 @@ kaunas3_df <- kaunas_sf %>%
   rename(deeper_count = "n") %>% 
    dplyr::select(date_name, deeper_count)
 
-write.csv(kaunas3_df, here("data", "kaunas3_df.csv"))
+write.csv(kaunas3_df, here("data", "kaunas_df.csv"))
 
+
+kaunas3_df <- kaunas_sf %>% 
+  st_drop_geometry() %>% # distinct() doesnt like spatial objects
+  dplyr::filter(date_name >= "2021-01-10",date_name <= "2021-02-28") %>%
+  dplyr::distinct(user_id, date_name, .keep_all = T)
+
+hist(kaunas3_df$hour_of_day, breaks = 23)
 
 # Load shapefile of drone surveyed area
  
@@ -827,7 +742,7 @@ kaunas3_drone_df <- kaunas_drone_sf %>%
   rename(deeper_count = "n") %>% 
    dplyr::select(date_name, deeper_count)
 
-write.csv(kaunas3_drone_df, here("data", "kaunas3_drone_df.csv"))
+write.csv(kaunas3_drone_df, here("data", "kaunas_drone_df.csv"))
 
 # Creating df just drone surveys 6-12
 
@@ -841,25 +756,13 @@ kaunas3612_drone_df <- kaunas_drone_sf %>%
   rename(deeper_count = "n") %>% 
    dplyr::select(date_name, deeper_count)
 
-write.csv(kaunas3612_drone_df, here("data", "kaunas3612_drone_df.csv"))
-
-# Compare with old file
-
-# deeper3years <- read_csv(here("data", "deeper3years.csv")) %>% 
-#   dplyr::select(2:3)
-# 
-# summary(deeper3years)
-# summary(kaunas3_df)
-# 
-# compare_deeper = compare_df(deeper3years, kaunas3_df, c("date_name"))
-# 
-# create_output_table(compare_deeper)
+write.csv(kaunas3612_drone_df, here("data", "kaunas612_drone_df.csv"))
 
 ```
 
-### prepare the dataset
+### prepare dataset for Bayesian analyses
 
-```{r}
+```{r, eval = F, include = F}
 
 #read in drone data by day
 drone <- read.csv(file = "data/DroneSummary.csv", fileEncoding="UTF-8-BOM")
@@ -867,56 +770,98 @@ drone$date2 <- as.Date(drone$Date, "%d/%m/%Y")
 drone <- drone %>% dplyr::select (date2, weekday, Anglers, Temp, wind, Ice, season)
 
 #get deeper data for all area all day 
-deeper1 <- read.csv(file = "data/kaunas3_df.csv", fileEncoding="UTF-8-BOM")
+deeper1 <- read.csv(file = "data/kaunas_df.csv", fileEncoding="UTF-8-BOM")
 deeper1$date2 <- as.Date(deeper1$date_name, "%Y-%m-%d") 
 #add to drone data
 drone$deeper1 <- deeper1$deeper_count[match(drone$date2, deeper1$date2)]
 
 ## now deeper data for only drone area for all day
-deeper2 <- read.csv(file = "data/kaunas3_drone_df.csv", fileEncoding="UTF-8-BOM")
+deeper2 <- read.csv(file = "data/kaunas_drone_df.csv", fileEncoding="UTF-8-BOM")
 deeper2$date2 <- as.Date(deeper2$date_name, "%Y-%m-%d") 
 drone$deeper2 <- deeper2$deeper_count[match(drone$date2, deeper2$date2)]
 
 #deeper data for drone area from 6 to 12
-deeper3 <- read.csv(file = "data/kaunas3612_drone_df.csv", fileEncoding="UTF-8-BOM")
+deeper3 <- read.csv(file = "data/kaunas612_drone_df.csv", fileEncoding="UTF-8-BOM")
 deeper3$date2 <- as.Date(deeper3$date_name, "%Y-%m-%d")
 drone$deeper3 <- deeper3$deeper_count[match(drone$date2, deeper3$date2)]
 
-#include all data for testing
-ddF <- read.csv(file = "data/ddF.csv", header = T, sep = ",", dec = ".")
-ddF$date2 <- as.Date(ddF$date, "%d/%m/%Y")
-
-drone$droneTest <- ddF$drone[match(drone$date2, ddF$date2)]
-drone$deeperTest <- ddF$deeper[match(drone$date2, ddF$date2)]
-
+##replace NA deeper days with 0
 drone$deeper3[which(is.na(drone$deeper3 == T))] <- 0
 drone$deeper2[which(is.na(drone$deeper2 == T))] <- 0
+drone$deeper1[which(is.na(drone$deeper1 == T))] <- 0
 
-drone$difference <- drone$deeperTest - drone$deeper1
+drone$ice2 <- 0
+drone$ice2[which(drone$Ice == "Ice")] <- 1
 
 droneDeeperMain <- drone
 
-save(droneDeeperMain, file = "data/droneDeeperMain.RData")
-
+#save(droneDeeperMain, file = "data/droneDeeperMain.RData")
+Tables1 <- droneDeeperMain[,c(11, 2:8,12:14)] %>% arrange(date2)
+knitr::kable(Tables1, digits=2)
 
 ```
 
-Fernando, why do we have different number of deeper users in the initial dataset (droneDeeperMain$deeperTest) that was used for the early model and in the updated dataset (droneDeeperMain$deeper1). No problem if these corrected mistakes, but it would be good to know what is the reason 
+### Now divide sonar dataset into three categories
+
+For every day of the year starting from 2020-03-01 we will count the number of sonar users in the entire area, surveyed area, and surveyed area mornings only. However, since sonar dataset has some days with no observations we first need to create a dataframe with all days and then merge it with sonar dataset
+
+```{r}
+#read in all sonar 3 observations for 2019-2021
+
+extr3 <-  read.csv(here("data", "kaunas612_drone_df.csv"), header = T, sep = ",", dec = ".")
+extr2 <-  read.csv(here("data", "kaunas_drone_df.csv"), header = T, sep = ",", dec = ".")
+extr1 <-  read.csv(here("data", "kaunas_df.csv"), header = T, sep = ",", dec = ".")
+
+extr1$date_name <- as.Date(extr1$date_name)
+extr2$date_name <- as.Date(extr2$date_name)
+extr3$date_name <- as.Date(extr3$date_name)
+
+#on some days there are no sonar observations, and these days will not be present in the datafile. So we will create a dataframe with all days and merge with sonar days
+days2020 <- seq(as.Date("2020-03-01"), as.Date("2021-02-28"), by="days")
+weekd <- weekdays(days2020, abbr = TRUE)
+#which(weekd == "Sat" | weekd == "Sun")
+W = rep(0, length = length(days2020))
+W[which(weekd == "Sat" | weekd == "Sun")] <- 1
+test <- as.data.frame(cbind(as.Date(days2020), W))
+test$date <- as.Date(days2020)
+test <- test[,-1]
+colnames(test) <- c("weekday", "date_name")
+
+#add deeper observations
+test$deeper1 <- extr1$deeper_count[match(test$date_name, extr1$date_name)]
+test$deeper2 <- extr2$deeper_count[match(test$date_name, extr2$date_name)]
+test$deeper3 <- extr3$deeper_count[match(test$date_name, extr3$date_name)]
+
+test$deeper3[which(is.na(test$deeper3 == T))] <- 0
+test$deeper2[which(is.na(test$deeper2 == T))] <- 0
+test$deeper1[which(is.na(test$deeper1 == T))] <- 0
+
+test$ice <- 0
+test$ice[which(test$date_name > "2021-01-10")] <- 1
+
+extrapData <- test
+
+# save(data/extrapData, file = "OneYearExtrapol_deeper3.RData")
+# write.csv(extrapData, file = "TableSx_DailySonarUseData.csv")
+
+```
 
 ### explore three deeper datasets
 
 ```{r}
+load(file = "data/droneDeeperMain.RData")
+
 droneDeeperMain$ratioAllDrone <- droneDeeperMain$deeper2/droneDeeperMain$deeper1
 plot(droneDeeperMain$ratioAllDrone)
+which(droneDeeperMain$deeper1 < droneDeeperMain$deeper2)
 
 mean(droneDeeperMain$ratioAllDrone[which(droneDeeperMain$ice2 == 1)])
 median(droneDeeperMain$ratioAllDrone[which(droneDeeperMain$ice2 == 1)])
 droneDeeperMain$ratioAllDrone[which(droneDeeperMain$ice2 == 1)]
 
-mean(droneDeeperMain$ratioAllDrone[which(droneDeeperMain$ice2 == 0)])
-median(droneDeeperMain$ratioAllDrone[which(droneDeeperMain$ice2 == 0)])
+mean(droneDeeperMain$ratioAllDrone[which(droneDeeperMain$ice2 == 0)], na.rm = T)
+median(droneDeeperMain$ratioAllDrone[which(droneDeeperMain$ice2 == 0)], na.rm = T)
 droneDeeperMain$ratioAllDrone[which(droneDeeperMain$ice2 == 0)]
-
 
 droneDeeperMain$ratioMornEven <- droneDeeperMain$deeper3/droneDeeperMain$deeper2
 plot(droneDeeperMain$ratioMornEven)
@@ -928,7 +873,6 @@ droneDeeperMain$ratioMornEven[which(droneDeeperMain$ice2 == 1)]
 mean(droneDeeperMain$ratioMornEven[which(droneDeeperMain$ice2 == 0)], na.rm =T)
 median(droneDeeperMain$ratioMornEven[which(droneDeeperMain$ice2 == 0)], na.rm =T)
 droneDeeperMain$ratioMornEven[which(droneDeeperMain$ice2 == 0)]
-
 
 droneDeeperMain$ratioTotal <- droneDeeperMain$deeper3/droneDeeperMain$deeper1
 plot(droneDeeperMain$ratioTotal)
@@ -1017,7 +961,7 @@ multiplier_proposal <- function(i,d=1.2){ # d must be > 1!!
 
 ```
 
-### mock data 
+### mock data example
 
 since many people struggle to get their heads around log-exp relationship we will create a mock up data and estimate probabilities, to make sure we understand the output 
 
@@ -1028,270 +972,46 @@ load(file = "data/droneDeeperMain.RData")
 ## drone count
 N <- droneDeeperMain$Anglers# drone count
 W <- droneDeeperMain$weekday # weekend
-D <- droneDeeperMain$ice2    # ice
 
-# now let's assume sonar users are always 5% and there are 1.5 times more anglers on weekends
+# we make up some parameters about the ratio of sonar users and weekend multiplier and plug it into the formula
 
+#our equation is this:
 #r_current = r0_current * exp( a_current*W + b_current*D)
-S <- round((0.05*N + 2*W*0.05*N),0) #and assume that on weekend there are more anglers
+S <- round((0.1*N - 0.7*W*0.1*N),0) #and assume that on weekend there are more anglers
 round(S/N,2) #now we know the probability exactly
 
-
 ```
 
-### priors and initialise: two parameters
-
-```{r}
-
-load(file = "data/droneDeeperMain.RData")
-droneDeeperMain$ice2 <- 0
-droneDeeperMain$ice2[which(droneDeeperMain$Ice == "Ice")] <- 1
-
-##Table S1
-# droneDeeperMain <- droneDeeperMain %>% arrange(date2) %>% dplyr::select(date2, weekday, Anglers, Temp, wind, ice2, deeper1, deeper2, deeper3)
-# knitr::kable(droneDeeperMain, digits= 0)
-
-
-#if using deeper1 dataset we need to remove date where we have more deeper than drone counts as the model does not allow that 
-#droneDeeperMain <- droneDeeperMain[-which(droneDeeperMain$date2 == "2021-02-24"),]
-
-
-N <- droneDeeperMain$Anglers # drone count
-S <- droneDeeperMain$deeper2 # sonar count
-W <- droneDeeperMain$weekday # weekend
-D <- droneDeeperMain$ice2    # ice
-
-
-r0_current = 1
-a_current = 1
-b_current = 1
-
-r0_rate = 1
-a_mean = 0
-a_sig = 10
-b_mean = 0
-b_sig = 10
-
-
-
-# exponential correlation formula (which can never go negative, since we want a probability that is always positive)
-r_current = r0_current * exp( a_current*W + b_current*D)
-p_current = 1- exp( -r_current)
-# r_current
-# p_current
-
-likelihood_current = sum(dbinom(S, size=N, prob=p_current, log=TRUE))
-prior_current = log_pdf_exp(r0_current,r0_rate) + log_pdf_normal(a_current, a_mean, a_sig) + log_pdf_normal(b_current, b_mean, b_sig)
-posterior_current = likelihood_current + prior_current
-
-#for one parameters it was 
-# ### update probabilities to get final r and p 
-# r_current = r0_current * exp( a_current*W) # this is in a linear form (can get >1)
-# p_current = 1- exp( -r_current) #this is the final probability of deeper given drone on that day
-# 
-# likelihood_current = sum(dbinom(S, size=N, prob=p_current, log=TRUE))
-# prior_current = log_pdf_exp(r0_current,r0_rate) + log_pdf_normal(a_current, a_mean, a_sig)
-# posterior_current = likelihood_current + prior_current
-
-
-```
-
-### mmcmc: two parameters
-
-```{r mcmc}
-
-#_______________LOGFILE_____________
-# initiate log file (provide path to your target directory)
-
-logfile <- here("output", "logfile2p_droneDeeper2.txt")
-# define the column names
-cat(c("it","post","likelihood","prior","r0","a","b","p","\n"),file=logfile,sep="\t")
-#___________________________________
-
-
-# MCMC settings_____________________
-n_iterations  = 200000 # original 100.000
-sampling_freq = 100 # write to file every n iterations
-print_freq    = 1000 # print to screen every n iterations
-window_size_update_r0 = 0.04 #original 0.1
-window_size_update_a = 0.7 #original 0.1
-window_size_update_b = 0.6 #original 0.1
-
-
-# MCMC loop
-for (iteration in 0:n_iterations){
-  
-  #____PROPOSE NEW PARAMETERS_________
-  # propose new r0
-  proposal_r0 <- sliding_window(r0_current,window_size_update_r0) # use the proposal function and pre-defined window size in our settings to propose a new value for mu
-  new_r0 <- proposal_r0[1]
-  hastings_ratio_r0 <- proposal_r0[2]
-  
-  # propose new a
-  proposal_a <- sliding_window(a_current,window_size_update_a) # same for sigma
-  new_a <- abs(proposal_a[1]) # sigma however cannot be negative, so we use reflection at the boundary (0)
-  hastings_ratio_a <- proposal_a[2]
-  
-  # propose new b
-  proposal_b <- sliding_window(b_current,window_size_update_b) # same for sigma
-  new_b <- abs(proposal_b[1]) # sigma however cannot be negative, so we use reflection at the boundary (0)
-  hastings_ratio_b <- proposal_b[2]  
-  
-  # get overall hastings ratio of new parameter proposals
-  hastings_ratio <- hastings_ratio_r0 + hastings_ratio_a + hastings_ratio_b
-  #___________________________________
-  
-  #__________CALC POSTERIOR___________
-  # new likelihood and priors
-  new_r = new_r0 * exp( new_a*W + new_b*D)
-  new_p = 1 - exp( -new_r)
-  new_lik <- sum(dbinom(S, size=N, prob=new_p, log=TRUE)) # calc likelihood under the new proposed parameter values
-  new_prior <- log_pdf_exp(new_r0,r0_rate) + log_pdf_normal(new_a, a_mean, a_sig) + log_pdf_normal(new_b, b_mean, b_sig) # calculate the prior probability of the new parameter values (remember to add together the log-probs of the individual parameters)
-  new_posterior <- new_lik + new_prior # apply Bayes theorem to calculate the new posterior
-  #___________________________________
-  
-  #__________ACCEPTANCE CONDITION___________
-  # calculate posterior ratio 
-  posterior_ratio = new_posterior - posterior_current
-  # get acceptance ratio from posterior ratio and Hastings ratio
-  r = posterior_ratio + hastings_ratio
-  r
-  # accept or reject
-  random_number = runif(1)
-  if (log(random_number) <= r){
-    # if new state accepted, set current parameters to the new ones
-    r0_current = new_r0
-    a_current = new_a
-    b_current = new_b
-    p_current = new_p
-    likelihood_current = new_lik
-    prior_current = new_prior
-    posterior_current = new_posterior
-  }
-  # print to screen
-  if (iteration %% print_freq == 0){
-    print(c(iteration,likelihood_current, prior_current, r0_current, a_current, b_current, mean(p_current)))
-  }
-  # save to file
-  if (iteration %% sampling_freq == 0){
-    cat(c(iteration, posterior_current, likelihood_current, prior_current, r0_current, a_current, b_current, mean(p_current),"\n"),sep="\t",file=logfile,append=T)
-  }
-}
-
-```
-
-### results: two parameters
-
-```{r}
-#fit <- read.table(file = "output/logfile2p_mockupdata.txt", header = T)
-
- fit <- read.table(file = "output/logfile2p_deeper1.txt", header = T)
-# fit <- read.table(file = "output/logfile2p_dronedeeper2.txt", header = T)
-# fit <- read.table(file = "output/logfile2p_deeper3.txt", header = T)
-
-#plot(fit$likelihood, type = 'l')
-burnin <- 100
-fit <- fit[-c(1:burnin),]
-plot(fit$likelihood, type = 'l')
-
-## look at parameter quantiles 
-r0q <- c(quantile(fit$r0, probs = 0.025),quantile(fit$r0, probs = 0.100),quantile(fit$r0, probs = 0.500),quantile(fit$r0, probs = 0.900),quantile(fit$r0, probs = 0.975))
-aq <- c(quantile(fit$a, probs = 0.025),quantile(fit$a, probs = 0.100),quantile(fit$a, probs = 0.500),quantile(fit$a, probs = 0.900),quantile(fit$a, probs = 0.975))
-bq <- c(quantile(fit$b, probs = 0.025),quantile(fit$b, probs = 0.100),quantile(fit$b, probs = 0.500),quantile(fit$b, probs = 0.900),quantile(fit$b, probs = 0.975))
-pq <- c(quantile(fit$p, probs = 0.025),quantile(fit$p, probs = 0.100),quantile(fit$p, probs = 0.500),quantile(fit$p, probs = 0.900),quantile(fit$p, probs = 0.975))
-knitr::kable(rbind(r0q,aq,bq,pq), digits= 3)
-
-  
-pd_r0 <-  ggplot(data=fit, aes(x = r0)) + 
-      geom_density(fill = "wheat") +
-      labs(
-        x    = "r0",
-        y    = "Probability density"
-      ) + 
-     theme_bw() +
-    theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none") 
-
-pd_a <- ggplot(data=fit, aes(x = a)) + 
-      geom_density(fill = "wheat") +
-      labs(
-        x    = "a: weekend",
-        y    = "Probability density"
-      ) + 
-     theme_bw() +
-      theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none", axis.title.y = element_blank()) 
-
-pd_b <- ggplot(data=fit, aes(x = b)) + 
-      geom_density(fill = "wheat") +
-      labs(
-        x    = "b: ice",
-        y    = "Probability density"
-      ) + 
-     theme_bw() +
-      theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none", axis.title.y = element_blank()) 
-
-pd_prior <- ggplot(data=fit, aes(x = prior)) + 
-      geom_density(fill = "wheat") +
-      labs(
-        x    = "prior",
-        y    = "Probability density"
-      ) + 
-     theme_bw()
-
-pd_p <- ggplot(data=fit, aes(x = p)) + 
-      geom_density(fill = "wheat") +
-      labs(
-        x    = "p",
-        y    = "Probability density"
-      ) + 
-     theme_bw() +
-      theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none", axis.title.y = element_blank()) 
-
-
-plot_grid(pd_r0, pd_a, pd_b, pd_p, labels = NULL, ncol = 4, nrow =1)
-
-# r0 = 0.085
-# #a = 0.57
-# a = 1
-# Wt = c(1,0)
-# 
-# plin = r0*exp(a*Wt)
-# plin
-# 
-# r_current = r0_current * exp( a_current*W) # this is in a linear form (can get >1)
-# p_current = 1- exp( -r_current) 
-
-
-```
-
-## priors and initialise: one parameter
+# priors and initialise
 
 for this we analyse open water and ice data separately
 Or we use this part to compare deeper1 and deeper3
 
 ```{r}
 
-load(file = "data/droneDeeperMain.RData")
+# load(file = "data/droneDeeperMain.RData")
 
-droneDeeperMain$ice2 <- 0
-droneDeeperMain$ice2[which(droneDeeperMain$Ice == "Ice")] <- 1
-
-droneDeeperMain <- droneDeeperMain[which(droneDeeperMain$ice2 ==1),]
-
-#if using deeper1 dataset we need to remove date where we have more deeper than drone counts as the model does not allow that 
-#droneDeeperMain <- droneDeeperMain[-which(droneDeeperMain$date2 == "2021-02-24"),]
-
+## by selecting ice2 = 0 or 1 we chose whether to use open water or ice season 
+ droneDeeperMain <- droneDeeperMain[which(droneDeeperMain$ice2 ==0),]
 # 
-N <- droneDeeperMain$deeper1 # drone count
-S <- droneDeeperMain$deeper3 # sonar count
-W <- droneDeeperMain$weekday # weekend
+ N <- droneDeeperMain$Anglers # drone count
+ S <- droneDeeperMain$deeper3 # sonar count in the surveyed area mornings only
+ W <- droneDeeperMain$weekday # weekend
 
-# ## or alternatively we compare deeper 1 and deeper3 to get the proportion of anglers in small and full area/time
-# N <- droneDeeperMain$deeper1 # sonar count full area all day
-# S <- droneDeeperMain$deeper3 # sonar count drone area morning
-# W <- droneDeeperMain$weekday # weekend
+#or if we look at every day deeper usage for the whole year in three areas/times
+#load(file = "data/OneYearExtrapol_deeper3.RData")
+#first use open water data only
+#extrapData <- extrapData[which(extrapData$ice ==0),]
 
+#there is one weird case in 2020-03-08 when larger areas had fewer anglers than smaller area (must be due to the buffer zone, or different starting points). We will remove it for now
+#extrapData <- extrapData[-which(extrapData$deeper3 > extrapData$deeper1),]
+# 
+# ### or do it with the full 365 day dataset
+#  N <- extrapData$deeper1 # sonar count full area all day
+#  S <- extrapData$deeper3 # sonar count drone area 0 to 12
+#  W <- extrapData$weekday # weekend
 
-# I experimented with differnet initial values and they all very quickly converge, so initial values are not so important it seems 
+# I experimented with different initial values and they all very quickly converge, so initial values are not so important it seems 
 
 #these are initial values to define priors
 r0_current = 1 #probability of deeper given drone
@@ -1305,8 +1025,8 @@ a_sig = 10
 ### update probabilities to get final r and p 
 r_current = r0_current * exp( a_current*W) # this is in a linear form (can get >1)
 p_current = 1- exp( -r_current) #this is the final probability of deeper given drone on that day
-r_current
-p_current
+#r_current
+#p_current
 
 likelihood_current = sum(dbinom(S, size=N, prob=p_current, log=TRUE))
 prior_current = log_pdf_exp(r0_current,r0_rate) + log_pdf_normal(a_current, a_mean, a_sig)
@@ -1314,14 +1034,14 @@ posterior_current = likelihood_current + prior_current
 
 ```
 
-### mcmc: one parameter
+# mcmc
 
 ```{r mcmc}
 
 #_______________LOGFILE_____________
 # initiate log file (provide path to your target directory)
-logfile <- here("output", "logfile1p_deeper1deeper3_Ice.txt")
-#logfile <- here("output", "logfile_DroneDeeper3_Ice.txt")
+#logfile <- here("output", "logfile1p_FullD1D3_NoIce.txt")
+logfile <- here("output", "temporary.txt")
 # define the column names
 cat(c("it","post","likelihood","prior","r0","a","p","\n"),file=logfile,sep="\t")
 
@@ -1393,28 +1113,20 @@ for (iteration in 0:n_iterations){
 
 ```
 
-### results : one parameter
+# results
 
 ```{r}
-#fit <- read.table(file = "output/logfile1p_mockupdata.txt", header = T)
+#fit <- read.table(file = "output/logfile1p_mockdata.txt", header = T)
 
-#fit <- read.table(file = "output/logfile1p_deeper1_noIce.txt", header = T)
-#fit <- read.table(file = "output/logfile1p_deeper1_Ice.txt", header = T)
+fit <- read.table(file = "output/logfile1p_deeper3_Ice.txt", header = T)
+#fit <- read.table(file = "output/logfile1p_deeper3_NoIce.txt", header = T)
 
-#fit <- read.table(file = "output/logfile1p_deeper2_noIce.txt", header = T)
-#fit <- read.table(file = "output/logfile1p_deeper2_Ice.txt", header = T)
+# fit <- read.table(file = "output/logfile1p_deeper2_Ice.txt", header = T)
+# fit <- read.table(file = "output/logfile1p_deeper2_NoIce.txt", header = T)
 
-#fit <- read.table(file = "output/logfile_DroneDeeper3_Ice.txt", header = T)
-fit <- read.table(file = "output/logfile_DroneDeeper3_noIce.txt", header = T)
-
-#ratio of deeper users without and with ice
-# fit <- read.table(file = "output/logfile_deeperRatio_Ice.txt", header = T)
-# fit <- read.table(file = "output/logfile1p_deeper1deeper3_Ice.txt", header = T)
-# fit <- read.table(file = "output/logfile_deeperRatio_noIce.txt", header = T)
-#fit <- read.table(file = "output/logfile1p_deeper1deeper3_noIce.txt", header = T)
-
-#fit <- read.table(file = "output/logfile_deeperRatio.txt", header = T)
-
+#or with full deeper data comparing angler ratios throughout the year
+#fit <- read.table(file = "output/logfile1p_FullD1D3_NoIce.txt", header = T)
+#fit <- read.table(file = "output/logfile1p_FullD1D3_Ice.txt", header = T)
 
 # plot(fit$likelihood, type = 'l')
 burnin <- 100
@@ -1435,7 +1147,8 @@ pd_r0 <-  ggplot(data=fit, aes(x = r0)) +
         y    = "Probability density"
       ) + 
      theme_bw() +
-      theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none") 
+      theme(panel.border = element_blank(), 
+            panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none", axis.text.y = element_blank(), axis.text.x = element_text(size = 10), axis.title.x = element_text(size = 12)) 
 
 pd_a <- ggplot(data=fit, aes(x = a)) + 
       geom_density(fill = "wheat") +
@@ -1444,7 +1157,7 @@ pd_a <- ggplot(data=fit, aes(x = a)) +
         y    = "Probability density"
       ) + 
      theme_bw() +
-        theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none", axis.title.y = element_blank()) 
+        theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none", axis.title.y = element_blank(), axis.text.y = element_blank(), axis.text.x = element_text(size = 10), axis.title.x = element_text(size = 12)) 
 
 pd_prior <- ggplot(data=fit, aes(x = prior)) + 
       geom_density(fill = "wheat") +
@@ -1453,7 +1166,7 @@ pd_prior <- ggplot(data=fit, aes(x = prior)) +
         y    = "Probability density"
       ) + 
      theme_bw() +
-        theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none", axis.title.y = element_blank()) 
+        theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none", axis.title.y = element_blank(), axis.text.y = element_blank(), axis.text.x = element_text(size = 10), axis.title.x = element_text(size = 12)) 
 
 pd_p <- ggplot(data=fit, aes(x = p)) + 
       geom_density(fill = "wheat") +
@@ -1462,69 +1175,39 @@ pd_p <- ggplot(data=fit, aes(x = p)) +
         y    = "Probability density"
       ) + 
      theme_bw() +
-        theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none", axis.title.y = element_blank()) 
-
+        theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none", axis.title.y = element_blank(), axis.text.y = element_blank(), axis.text.x = element_text(size = 10), axis.title.x = element_text(size = 12)) +
+  #geom_text(x=0.0265, y=130, label= "Open water", size = 5, fontface = 3)
+  geom_text(x=0.19, y=25, label= "Ice", size = 5, fontface = 3)
 
 plot_grid(pd_r0, pd_a, pd_p, labels = NULL, ncol = 3, nrow =1)
 
-# r0 = 0.085
-# #a = 0.57
-# a = 1
-# Wt = c(1,0)
-# 
-# plin = r0*exp(a*Wt)
-# plin
-# 
-# r_current = r0_current * exp( a_current*W) # this is in a linear form (can get >1)
-# p_current = 1- exp( -r_current) 
-
-
 ```
+
+
+Note: with a mock data when probability on weekends is exactly the same, and the proportion is set at 0.1 we get these parameters
+|    |  2.5%|   10%|   50%|   90%| 97.5%|
+|:---|-----:|-----:|-----:|-----:|-----:|
+|r0q | 0.087| 0.093| 0.102| 0.111| 0.116|
+|aq  | 0.004| 0.014| 0.072| 0.179| 0.258|
+|pq  | 0.089| 0.093| 0.100| 0.108| 0.112|
+
+
 
 # extrapolation
-
-### prepare dataframe
-
-```{r}
-#read in all sonar 3 observations for 2019-2021
-
-extr <-  read.csv(here("data", "kaunas3612_drone_df.csv"), header = T, sep = ",", dec = ".")
-
-#on some days there are no sonar observations, and these days will not be present in the datafile. So we will create a dataframe with all days and merge with sonar days
-days2020 <- seq(as.Date("2020-03-01"), as.Date("2021-02-28"), by="days")
-weekd <- weekdays(days2020, abbr = TRUE)
-which(weekd == "Sat" | weekd == "Sun")
-W = rep(0, length = length(days2020))
-W[which(weekd == "Sat" | weekd == "Sun")] <- 1
-test <- as.data.frame(cbind(as.Date(days2020), W))
-test$date <- as.Date(days2020)
-test <- test[,-1]
-colnames(test) <- c("weekend", "date_name")
-extr$date_name <- as.Date(extr$date_name)
-
-#add deeper observations
-test$sonar <- extr$deeper_count[match(test$date_name, extr$date_name)]
-test$sonar[which(is.na(test$sonar == T))] <- 0
-test$ice <- 0
-test$ice[which(test$date_name > "2021-01-10")] <- 1
-
-extrapData <- test
-#save(extrapData, file = "OneYearExtrapol_deeper3.RData")
-#write.csv(extrapData, file = "TableSx_DailySonarUseData.csv")
-
-```
 
 ### extrapolate 
 
 ```{r}
+
+#load one year of deeper data
 load(file = "data/OneYearExtrapol_deeper3.RData")
 
 #total number of sonar counts per year 
 
-openWeekday <- extrapData %>% group_by(ice, weekend) %>% summarise (an = sum(sonar))
+openWeekday <- extrapData %>% group_by(ice, weekday) %>% summarise (an = sum(deeper3))
 
 ## first we use open water data only
-fit <- read.table(file = "output/logfile_DroneDeeper3_noIce.txt", header = T)
+fit <- read.table(file = "output/logfile1p_deeper3_noIce.txt", header = T)
 burnin <- 100
 fit <- fit[-c(1:burnin),]
 plot(fit$likelihood, type = 'l')
@@ -1537,21 +1220,21 @@ aq <- c(quantile(fit$a, probs = 0.025),quantile(fit$a, probs = 0.100),quantile(f
 pq <- c(quantile(fit$p, probs = 0.025),quantile(fit$p, probs = 0.100),quantile(fit$p, probs = 0.500),quantile(fit$p, probs = 0.900),quantile(fit$p, probs = 0.975))
 
 ### total number in open season: 50%
-r_current = r0q[3] * exp( aq[3]*df$weekend) # this is in a linear form 
+r_current = r0q[3] * exp( aq[3]*df$weekday) # this is in a linear form 
 p_current = 1- exp( -r_current) 
 angler_50q_o <- df$an*(1/p_current)
 
-r_current = r0q[1] * exp( aq[1]*df$weekend) # this is in a linear form 
+r_current = r0q[1] * exp( aq[1]*df$weekday) # this is in a linear form 
 p_current = 1- exp( -r_current) 
 angler_025q_o <- df$an*(1/p_current)
 
-r_current = r0q[5] * exp( aq[5]*df$weekend) # this is in a linear form 
+r_current = r0q[5] * exp( aq[5]*df$weekday) # this is in a linear form 
 p_current = 1- exp( -r_current) 
 angler_975q_o <- df$an*(1/p_current)
 
 ### now for ice
 ## first we use open water data only
-fit <- read.table(file = "output/logfile_DroneDeeper3_Ice.txt", header = T)
+fit <- read.table(file = "output/logfile1p_deeper3_Ice.txt", header = T)
 burnin <- 100
 fit <- fit[-c(1:burnin),]
 plot(fit$likelihood, type = 'l')
@@ -1564,293 +1247,47 @@ aq <- c(quantile(fit$a, probs = 0.025),quantile(fit$a, probs = 0.100),quantile(f
 pq <- c(quantile(fit$p, probs = 0.025),quantile(fit$p, probs = 0.100),quantile(fit$p, probs = 0.500),quantile(fit$p, probs = 0.900),quantile(fit$p, probs = 0.975))
 
 ### total number in open season: 50%
-r_current = r0q[3] * exp( aq[3]*df$weekend) # this is in a linear form 
+r_current = r0q[3] * exp( aq[3]*df$weekday) # this is in a linear form 
 p_current = 1- exp( -r_current) 
 angler_50q_i <- df$an*(1/p_current)
 
-r_current = r0q[1] * exp( aq[1]*df$weekend) # this is in a linear form 
+r_current = r0q[1] * exp( aq[1]*df$weekday) # this is in a linear form 
 p_current = 1- exp( -r_current) 
 angler_025q_i <- df$an*(1/p_current)
 
-r_current = r0q[5] * exp( aq[5]*df$weekend) # this is in a linear form 
+r_current = r0q[5] * exp( aq[5]*df$weekday) # this is in a linear form 
 p_current = 1- exp( -r_current) 
 angler_975q_i <- df$an*(1/p_current)
 
-#total number of anglers per year
+#total number of anglers per year in surveyed area and time
 sum(angler_50q_o, angler_50q_i)
 sum(angler_025q_o, angler_025q_i)
 sum(angler_975q_o, angler_975q_i)
 
+## total area 
+
 #for open water season only
-sum(angler_50q_o)/0.2
-sum(angler_025q_o)/0.2
-sum(angler_975q_o)/0.2
+sum(angler_50q_o)
+sum(angler_025q_o)
+sum(angler_975q_o)
+
+## to fully propagate error we get lower and upper intevals also from useing lower and upper intervals of angler proportion (in Table 2)
+sum(angler_50q_o)/0.255
+sum(angler_025q_o)/0.232
+sum(angler_975q_o)/0.28
 
 #for ice season only
-sum(angler_50q_i)/0.1
-sum(angler_025q_i)/0.1
-sum(angler_975q_i)/0.1
+sum(angler_50q_i)
+sum(angler_025q_i)
+sum(angler_975q_i)
 
-sum(angler_50q_o)/0.2 + sum(angler_50q_i)/0.1
-sum(angler_025q_o)/0.2 + sum(angler_025q_i)/0.1
-sum(angler_975q_o)/0.2 + sum(angler_975q_i)/0.1
+sum(angler_50q_i)/0.203
+sum(angler_025q_i)/0.185
+sum(angler_975q_i)/0.222
 
-
-
-
-#work days - 6.5% - 7.9% - 9.0% 
-#weekends - 9.6% - 13.6% - 20.3%
-
-
-## plot estimated angler numbers 
-plot(extr$date_name, angler_50q, type = 'l', xlab = "Data", ylab = "Apskaiciuotas žveju skaičius", lwd = 1,  cex.lab=1, las=1, cex.axis=1, ylim = c(0, 800))
-# add polygon and overlplot the lines
-polygon(c(extr$date_name, rev(extr$date_name)), c(angler_95q, rev(angler_5q)), col="darkgrey",border=NA)
-lines(extr$date_name, angler_50q, lty="solid", col="black", lwd=1.5)
-#ice
-which(extr$date_name == "2019-02-28")
-abline(v=as.numeric(extr$date_name[53]), lwd=2, col='blue')
-#ice2
-which(extr$date_name == "2021-01-16")
-abline(v=as.numeric(extr$date_name[686]), lwd=2, col='blue')
-#karantinas
-abline(v=as.numeric(extr$date_name[396]), lwd=2, col='red')
-abline(v=as.numeric(extr$date_name[488]), lwd=2, col='red')
-abline(v=as.numeric(extr$date_name[626]), lwd=1, col='red')
-
-## zoom in 
-plot(extr$date_name, angler_50q, type = 'l', xlab = "Data", ylab = "Apskaiciuotas žveju skaičius", lwd = 1,  cex.lab=1, las=1, cex.axis=1, ylim = c(0, 220))
-# add polygon and overlplot the lines
-polygon(c(extr$date_name, rev(extr$date_name)), c(angler_95q, rev(angler_5q)), col="darkgrey",border=NA)
-lines(extr$date_name, angler_50q, lty="solid", col="black", lwd=1.5)
-abline(h=0)
-# which day corresponds to the lockdown start? 
-which(extr$date_name == "2020-03-16")
-abline(v=as.numeric(extr$date_name[396]), lwd=1.5, col='red')
-#lockdown end? 
-which(extr$date_name == "2020-06-16")
-abline(v=as.numeric(extr$date_name[488]), lwd=1.5, col='red')
-#new lockdown
-which(extr$date_name == "2020-11-07")
-abline(v=as.numeric(extr$date_name[626]), lwd=1.5, col='red')
-
-#lockdonw - 2020-03-16 until 2020-06-16
-#second lockdown from 2020-11-07
-
-#and the actual total number of anglers in 2020 
-temp <- angler_50q[which(extr$date_name < "2020-01-01")]
-temp1 <- angler_5q[which(extr$date_name < "2020-01-01")]
-temp2 <- angler_95q[which(extr$date_name < "2020-01-01")]
-sum(temp)
-sum(temp1)
-sum(temp2)
+sum(angler_50q_o)/0.255 + sum(angler_50q_i)/0.203
+sum(angler_025q_o)/0.232 + sum(angler_025q_i)/0.185
+sum(angler_975q_o)/0.28 + sum(angler_975q_i)/0.222
 
 ```
 
-
-# ### old stuff 
-### old: Drone and deeper count by day
-
-```{r dronedays}
-
-# Loading drone counts
-
-drone_data <- read_xlsx(here("data/drone_data", "drone_raw.xlsx")) %>% 
-  janitor::clean_names() %>% 
-  dplyr::mutate(date_name = lubridate::ymd(date)) %>% # parsing chr into date
-  # mutate(month_name = month(date, label = TRUE)) %>%
-  # mutate(year_name = year(date)) %>%
-  # mutate(day_week = wday(date, label = TRUE)) %>% 
-  dplyr::rename(drone_count = number) %>% 
-  dplyr::select(-date) #to avoid confusion
-  
-glimpse(drone_data)
-
-# Load data for Lithuania in 2020-2021 (drone flights years)
-
-lit20_21_df <- readRDS( here("data", "total_lithuania_df")) %>% 
-  dplyr::filter(year_name %in% c("2020", "2021")) 
-
-# Make spatial
-
-lit20_21_sf <- st_as_sf(lit20_21_df, coords = c("lat", "lon"),  crs=4326)
-
-
-# Load kaunas shape
-
-kau_shape <- here("data" , "arcgis_layers", "Kaunas_water_reservoir.shp") %>%
-  st_read() %>% 
-  st_transform(4326) #transform crs to wgs84
-
-
-# Filtering data within Kaunas reservoir
-
-kaunas20_21_sf <- 
-  st_join(lit20_21_sf, kau_shape, join = st_within) %>%  # spatial join to get intersection of points and poly
-  filter(!is.na(NAM)) 
-
-# Simple df
-
-kaunas20_21_df <- kaunas20_21_sf %>% 
-   sf::st_drop_geometry()
-
-
-drone_comp <- full_join(drone_data, kaunas20_21_df) %>% 
-  dplyr::distinct(user_id, date_name, .keep_all = T) %>% # to count each user only once per day
- # filter(hour_of_day >= 8, hour_of_day <= 11) %>%  #  filter by hour range
-  dplyr::add_count(date_name, sort = TRUE) %>%  # count users by day
-  dplyr::distinct(date_name, .keep_all = T)  %>%
-  dplyr::rename(deeper_count = "n") %>% 
-  drop_na(drone_count)
-
-
-deeper_vs_drone_binomial <- drone_comp %>% 
-  dplyr::mutate(weekend = case_when(
-    day_week == "Sat" ~ "1",
-    day_week == "Sun" ~ "1",
-    TRUE ~ "0")) %>% 
-  dplyr::select(deeper_count,drone_count,weekend,date_name)%>% 
-dplyr::rename(date = date_name, deeper = deeper_count, drone = drone_count) %>% 
-  dplyr::mutate(weekend = as.integer(weekend),
-                drone = as.integer(drone))
-
-
- skim(deeper_vs_drone_binomial)
- 
-saveRDS(deeper_vs_drone_binomial, here("data", "deeper_vs_drone_binomial.rds"))
-
-write_csv(deeper_vs_drone_binomial, here("data", "deeper_vs_drone_binomial.csv"))
-
-
-# Check differences
-
-# dvsdrone <- deeper_vs_drone_binomial 
-# 
-# ddF_old <- read.csv(file = "data/ddF.csv", header = T, sep = ",", dec = ".")
-# ddF_old <- as.data.frame(ddF)
-# #
-# skim(deeper_vs_drone_binomial)
-# skim(ddF_old)
-# # 
-# dplyr::all_equal(deeper_vs_drone_binomial, ddF_old)
-# compare_df_cols(deeper_vs_drone_binomial, ddF_old)
-# diffdf(deeper_vs_drone_binomial, ddF_old)
-
-
-# 
-# summary(ddF_old)
-# ddF <- ddF %>% 
-#     dplyr::mutate(date = dmy(date))
-#   
-# 
-# compare_ddf = compare_df(dvsdrone, ddF, c("date"))
-# 
-# create_output_table(compare_ddf)
-
-
-```
-
-### old: DF for bayes
-
-```{r data}
-
-# This df is the new one> Same variables, same type, 5 more obs. It doesn't work.
-# 
-#  ddF <- readRDS(here("data", "deeper_vs_drone_binomial.rds"))
-
-# This one below is the original one, it runs without problems
-
-ddF <- read.csv(file = "data/ddF.csv", header = T, sep = ",", dec = ".")
-ddF <- as.data.frame(ddF)
-
-# ddF$date2 <- as.Date(ddF$date, "%d/%m/%Y")
-
-## same but without ice season, which started on 2021-01-27
-#ddF <- ddF %>% filter (date2 < "2021-01-20") 
-
-N <-ddF$drone # drone count
-W <- ddF$weekend # weekend
-S <- ddF$deeper
-```
-
-### extrapolation code from Tobias
-
-```{r, include = F}
-# a clumsy way to make a data frame of days for 2020 - we can't just use deeper days, because we also need days when there were no deeper counts
-
-days2020 <- seq(as.Date("2020-01-01"), as.Date("2020-12-31"), by="days")
-weekd <- weekdays(days2020, abbr = TRUE)
-which(weekd == "Sat" | weekd == "Sun")
-
-W = rep(0, length = length(days2020))
-W[which(weekd == "Sat" | weekd == "Sun")] <- 1
-
-test <- as.data.frame(cbind(as.Date(days2020), W))
-test$date <- as.Date(days2020)
-test <- test[,-1]
-colnames(test) <- c("weekend", "date_name")
-test2 <- as.data.frame(left_join(test, extr, by = "date_name"))
-days2020 <- test2[,c(1:3)]
-days2020$deeper_count[which(is.na(days2020$deeper_count)==TRUE)] <- 0
-
-r0_mean = r0q[3]
-a_mean = a[3]
-days2020[is.weekend(days2020)]
-
-
-# read some data for which to estimate the drone_count (i.e. the true number of fishermen out on that day)
-data_content = extr %>% filter (date_name > "2020-01-01" & date_name < "2020-12-31")
-true_N = data_content$drone_count # true number
-S = data_content$n # sonar counts
-W = data_content$weekend # W = 0 -> sunny, W = 1 -> rainy
-D = data_content$length_trip # D = 0 -> weekday, W = 1 -> weekend
-# predict true number of fishermen using the estimates of p (probability of a fishermen having and using sonar)
-r_current = r0_mean * exp( a_mean*W + b_mean*D)
-p_current = 1- exp( -r_current)
-
-N = 0:1000 # define the range of possible total fishermen counts
-samples_N = list()
-for (i in 1:length(p_current)){
-  posterior_probs = dbinom(S[i], size=N, p=p_current[i]) # calculate a posterior probability of each of these counts under a given S and p
-  possible_Ns = sample(N, size = 10000, replace = T, prob=posterior_probs) # draw 10000 samples from that posterior distribution
-  samples_N[[i]] = possible_Ns
-  pdf(paste0('plots/day_',i,'.pdf'))
-  hist(possible_Ns,breaks = seq(0,max(N),10))
-  abline(v=true_N[i],lty=2,col='red')
-  dev.off()  
-  }
-
-#original code
-# mcmc_samples = read.table('r_mcmc_samples_fishermen_sonar.txt',header = TRUE)
-# # remove first 10% as burnin
-# n_samples = dim(mcmc_samples)[1]
-# ten_percent_cutoff = as.integer(0.1*n_samples)+1
-# mcmc_samples_clean = mcmc_samples[ten_percent_cutoff:n_samples,]
-# # calculate the mean estimate of r0, a, and b
-# r0_mean = mean(mcmc_samples_clean$r0)
-# a_mean = mean(mcmc_samples_clean$a)
-# b_mean = mean(mcmc_samples_clean$b)
-# # read some data for which to estimate the drone_count (i.e. the true number of fishermen out on that day)
-# data_content = read.csv('data_tobias.csv')
-# true_N = data_content$drone_count # true number
-# S = data_content$n # sonar counts
-# W = data_content$weekend # W = 0 -> sunny, W = 1 -> rainy
-# D = data_content$length_trip # D = 0 -> weekday, W = 1 -> weekend
-# # predict true number of fishermen using the estimates of p (probability of a fishermen having and using sonar)
-# r_current = r0_mean * exp( a_mean*W + b_mean*D)
-# p_current = 1- exp( -r_current)
-# 
-# N = 0:1000 # define the range of possible total fishermen counts
-# samples_N = list()
-# for (i in 1:length(p_current)){
-#   posterior_probs = dbinom(S[i], size=N, p=p_current[i]) # calculate a posterior probability of each of these counts under a given S and p
-#   possible_Ns = sample(N, size = 10000, replace = T, prob=posterior_probs) # draw 10000 samples from that posterior distribution
-#   samples_N[[i]] = possible_Ns
-#   pdf(paste0('plots/day_',i,'.pdf'))
-#   hist(possible_Ns,breaks = seq(0,max(N),10))
-#   abline(v=true_N[i],lty=2,col='red')
-#   dev.off()  
-#   }
-
-
-```
